@@ -840,6 +840,9 @@ public class DataTree {
 
     }
 
+    /**
+     * 全局 zxid
+     */
     public volatile long lastProcessedZxid = 0;
 
     public ProcessTxnResult processTxn(TxnHeader header, Record txn, TxnDigest digest) {

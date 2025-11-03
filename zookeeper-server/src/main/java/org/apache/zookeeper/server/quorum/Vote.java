@@ -69,12 +69,24 @@ public class Vote {
 
     private final int version;
 
+    /**
+     * 提议 sid
+     */
     private final long id;
 
+    /**
+     * 提议 zxid
+     */
     private final long zxid;
 
+    /**
+     * 发送者的 logicClock 逻辑时钟
+     */
     private final long electionEpoch;
 
+    /**
+     * 提议 epoch
+     */
     private final long peerEpoch;
 
     public int getVersion() {
@@ -101,6 +113,9 @@ public class Vote {
         return state;
     }
 
+    /**
+     * 发送者状态
+     */
     private final ServerState state;
 
     @Override
