@@ -18,6 +18,8 @@
 
 package org.apache.zookeeper.server;
 
+import org.apache.zookeeper.common.Time;
+
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,7 +27,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import org.apache.zookeeper.common.Time;
 
 /**
  * ExpiryQueue tracks elements in time sorted fixed duration buckets.
@@ -34,22 +35,32 @@ import org.apache.zookeeper.common.Time;
  */
 public class ExpiryQueue<E> {
 
+    // Session -> 过期时间
     private final ConcurrentHashMap<E, Long> elemMap = new ConcurrentHashMap<E, Long>();
     /**
      * The maximum number of buckets is equal to max timeout/expirationInterval,
      * so the expirationInterval should not be too small compared to the
      * max timeout that this expiry queue needs to maintain.
      */
-    private final ConcurrentHashMap<Long, Set<E>> expiryMap = new ConcurrentHashMap<Long, Set<E>>();
+    private final ConcurrentHashMap<Long, Set<E>> expiryMap = new ConcurrentHashMap<Long, Set<E>>(); // 过期时间 -> Session 集合
 
+    /**
+     * 下个过期时间
+     */
     private final AtomicLong nextExpirationTime = new AtomicLong();
+    /**
+     * 过期时间间隔 tickTime
+     */
     private final int expirationInterval;
 
     public ExpiryQueue(int expirationInterval) {
         this.expirationInterval = expirationInterval;
-        nextExpirationTime.set(roundToNextInterval(Time.currentElapsedTime()));
+        nextExpirationTime.set(roundToNextInterval(Time.currentElapsedTime())); // 初始化为当前时间
     }
 
+    /**
+     * 将 time 向上调整为 expirationInterval 的整数倍
+     */
     private long roundToNextInterval(long time) {
         return (time / expirationInterval + 1) * expirationInterval;
     }

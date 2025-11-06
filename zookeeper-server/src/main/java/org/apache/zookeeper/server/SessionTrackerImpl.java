@@ -18,23 +18,20 @@
 
 package org.apache.zookeeper.server;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.text.MessageFormat;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.KeeperException.SessionExpiredException;
 import org.apache.zookeeper.common.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.text.MessageFormat;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * This is a full featured SessionTracker. It tracks session in grouped by tick
@@ -46,8 +43,14 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
 
     private static final Logger LOG = LoggerFactory.getLogger(SessionTrackerImpl.class);
 
+    /**
+     * SessionId -> Session
+     */
     protected final ConcurrentHashMap<Long, SessionImpl> sessionsById = new ConcurrentHashMap<Long, SessionImpl>();
 
+    /**
+     * 过期队列: 用于维护会话的过期, 并且使用 bucket 来维护会话, 每个 bucket 对应某时间范围内过期的会话
+     */
     private final ExpiryQueue<SessionImpl> sessionExpiryQueue;
 
     protected final ConcurrentMap<Long, Integer> sessionsWithTimeout;
@@ -96,6 +99,12 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
      * @return the session Id
      */
     public static long initializeNextSessionId(long id) {
+        /*
+         * 参数 id 为 sid
+         * 高 8 位确定了所在机器, 建议值为 [1 ... 127]
+         * 中间 40 位使用当前时间戳 (毫秒), 保证单机环境唯一性
+         * 最后低 16 位都是 0 可用于并发自增, 1 ms 最多 65535, 6553.5W qps/s
+         */
         long nextSid;
         nextSid = (Time.currentElapsedTime() << 24) >>> 8;
         nextSid = nextSid | (id << 56);
@@ -158,12 +167,15 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
     public void run() {
         try {
             while (running) {
+                // 1. 获取下一个过期时间点
+                // 2. 如果下一个过期时间点 >  当前时间: 阻塞等待, 当前时间 - 下一个过期时间点
                 long waitTime = sessionExpiryQueue.getWaitTime();
                 if (waitTime > 0) {
                     Thread.sleep(waitTime);
                     continue;
                 }
 
+                // 3. 如果下一个过期时间点 <= 当前时间: 更新下一个过期时间点, 剔除 Session, 断开连接
                 for (SessionImpl s : sessionExpiryQueue.poll()) {
                     ServerMetrics.getMetrics().STALE_SESSIONS_EXPIRED.add(1);
                     setSessionClosing(s.sessionId);
@@ -189,6 +201,7 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
             return false;
         }
 
+        // 没关闭则更新过期时间
         updateSessionExpiry(s, timeout);
         return true;
     }

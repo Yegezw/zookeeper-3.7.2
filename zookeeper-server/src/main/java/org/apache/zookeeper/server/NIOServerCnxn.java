@@ -66,6 +66,9 @@ public class NIOServerCnxn extends ServerCnxn {
 
     private final SelectionKey sk;
 
+    /**
+     * 是否初始化完成
+     */
     private boolean initialized;
 
     private final ByteBuffer lenBuffer = ByteBuffer.allocate(4);
@@ -184,8 +187,10 @@ public class NIOServerCnxn extends ServerCnxn {
             incomingBuffer.flip();
             packetReceived(4 + incomingBuffer.remaining());
             if (!initialized) {
+                // 接收请求
                 readConnectRequest();
             } else {
+                // 处理请求
                 readRequest();
             }
             lenBuffer.clear();
