@@ -72,20 +72,27 @@ public class ProposalRequestProcessor implements RequestProcessor {
          * the leader that issued the sync command, then syncHandler won't
          * contain the handler. In this case, we add it to syncHandler, and
          * call processRequest on the next processor.
+         * 如果是 Follower / Observer 则走 if 分支, Leader 走 else
          */
         if (request instanceof LearnerSyncRequest) {
             zks.getLeader().processSync((LearnerSyncRequest) request);
         } else {
+            // 默认是 true
             if (shouldForwardToNextProcessor(request)) {
-                nextProcessor.processRequest(request);
+                nextProcessor.processRequest(request); // 进入下一个处理器
+                // 不过此时调用后, CommitProcessor 会 wait 阻塞住
+                // CommitProcessor 会等待 ack 过半, 然后调用 FinalRequestProcessor 将数据写到内存, 之后就可以对外读取了
+                // 全局流程见 LeaderZooKeeperServer#setupRequestProcessors
             }
             if (request.getHdr() != null) {
                 // We need to sync and get consensus on any transactions
                 try {
-                    zks.getLeader().propose(request);
+                    zks.getLeader().propose(request);  // 向 Follower 发起提议 (通知 Follower 写入这个数据到事务日志)
                 } catch (XidRolloverException e) {
                     throw new RequestProcessorException(e.getMessage(), e);
                 }
+                // 进入 SyncRequestProcessor#processRequest
+                // 将数据写入本地事务日志文件, 且返回 ack (也就是给自己记一票)
                 syncProcessor.processRequest(request);
             }
         }

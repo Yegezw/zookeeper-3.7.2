@@ -18,19 +18,16 @@
 
 package org.apache.zookeeper.server;
 
+import org.apache.zookeeper.common.Time;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Flushable;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Objects;
 import java.util.Queue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
-import org.apache.zookeeper.common.Time;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.concurrent.*;
 
 /**
  * This RequestProcessor logs requests to disk. It batches the requests to do
@@ -166,8 +163,8 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                 Request si = queuedRequests.poll(pollTime, TimeUnit.MILLISECONDS);
                 if (si == null) {
                     /* We timed out looking for more writes to batch, go ahead and flush immediately */
-                    flush();
-                    si = queuedRequests.take();
+                    flush(); // 事务日志刷盘
+                    si = queuedRequests.take(); // 拿出数据
                 }
 
                 if (si == REQUEST_OF_DEATH) {
@@ -177,11 +174,12 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                 long startProcessTime = Time.currentElapsedTime();
                 ServerMetrics.getMetrics().SYNC_PROCESSOR_QUEUE_TIME.add(startProcessTime - si.syncQueueStartTime);
 
-                // track the number of records written to the log
+                // track the number of records written to the log 将数据追加到事务日志
                 if (!si.isThrottled() && zks.getZKDatabase().append(si)) {
+                    // 是否需要写快照文件
                     if (shouldSnapshot()) {
                         resetSnapshotStats();
-                        // roll the log
+                        // roll the log 写入新的事务日志文件
                         zks.getZKDatabase().rollLog();
                         // take a snapshot
                         if (!snapThreadMutex.tryAcquire()) {
@@ -190,7 +188,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                             new ZooKeeperThread("Snapshot Thread") {
                                 public void run() {
                                     try {
-                                        zks.takeSnapshot();
+                                        zks.takeSnapshot(); // 开个线程去生成快照文件
                                     } catch (Exception e) {
                                         LOG.warn("Unexpected exception", e);
                                     } finally {
@@ -205,7 +203,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                     // iff this is a read or a throttled request(which doesn't need to be written to the disk),
                     // and there are no pending flushes (writes), then just pass this to the next processor
                     if (nextProcessor != null) {
-                        nextProcessor.processRequest(si);
+                        nextProcessor.processRequest(si); // 调用 ack 链条
                         if (nextProcessor instanceof Flushable) {
                             ((Flushable) nextProcessor).flush();
                         }
@@ -214,7 +212,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                 }
                 toFlush.add(si);
                 if (shouldFlush()) {
-                    flush();
+                    flush(); // 刷盘: 将数据真正写到磁盘中, 因为前面追加到事务日志中的数据可能在操作系统 OS Cache 中, 这里强刷到磁盘, 并调用 ack 链条
                 }
                 ServerMetrics.getMetrics().SYNC_PROCESS_TIME.add(Time.currentElapsedTime() - startProcessTime);
             }
@@ -232,7 +230,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
         ServerMetrics.getMetrics().BATCH_SIZE.add(toFlush.size());
 
         long flushStartTime = Time.currentElapsedTime();
-        zks.getZKDatabase().commit();
+        zks.getZKDatabase().commit(); // 事务日志刷盘
         ServerMetrics.getMetrics().SYNC_PROCESSOR_FLUSH_TIME.add(Time.currentElapsedTime() - flushStartTime);
 
         if (this.nextProcessor == null) {
@@ -242,7 +240,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
                 final Request i = this.toFlush.remove();
                 long latency = Time.currentElapsedTime() - i.syncQueueStartTime;
                 ServerMetrics.getMetrics().SYNC_PROCESSOR_QUEUE_AND_FLUSH_TIME.add(latency);
-                this.nextProcessor.processRequest(i);
+                this.nextProcessor.processRequest(i); // 调用 ack 链条
             }
             if (this.nextProcessor instanceof Flushable) {
                 ((Flushable) this.nextProcessor).flush();
@@ -274,7 +272,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
         Objects.requireNonNull(request, "Request cannot be null");
 
         request.syncQueueStartTime = Time.currentElapsedTime();
-        queuedRequests.add(request);
+        queuedRequests.add(request); // 加入队列
         ServerMetrics.getMetrics().SYNC_PROCESSOR_QUEUED.add(1);
     }
 

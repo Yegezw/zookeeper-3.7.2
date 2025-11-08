@@ -18,53 +18,11 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import java.io.BufferedInputStream;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.SocketAddress;
-import java.net.SocketException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
-import javax.security.sasl.SaslException;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.ZooDefs.OpCode;
 import org.apache.zookeeper.common.Time;
 import org.apache.zookeeper.jmx.MBeanRegistry;
-import org.apache.zookeeper.server.ExitCode;
-import org.apache.zookeeper.server.FinalRequestProcessor;
-import org.apache.zookeeper.server.Request;
-import org.apache.zookeeper.server.RequestProcessor;
-import org.apache.zookeeper.server.ServerMetrics;
-import org.apache.zookeeper.server.ZKDatabase;
-import org.apache.zookeeper.server.ZooKeeperCriticalThread;
-import org.apache.zookeeper.server.ZooTrace;
+import org.apache.zookeeper.server.*;
 import org.apache.zookeeper.server.quorum.QuorumPeer.LearnerType;
 import org.apache.zookeeper.server.quorum.auth.QuorumAuthServer;
 import org.apache.zookeeper.server.quorum.flexible.QuorumVerifier;
@@ -73,6 +31,18 @@ import org.apache.zookeeper.server.util.ZxidUtils;
 import org.apache.zookeeper.util.ServiceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.security.sasl.SaslException;
+import java.io.*;
+import java.net.*;
+import java.nio.ByteBuffer;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * This class has the control logic for the Leader.
@@ -902,6 +872,7 @@ public class Leader extends LearnerMaster {
         // in order to be committed, a proposal must be accepted by a quorum.
         //
         // getting a quorum from all necessary configurations.
+        // 是否过半, 如果返回的 ack 没过半则 return false
         if (!p.hasAllQuorums()) {
             return false;
         }
@@ -949,9 +920,10 @@ public class Leader extends LearnerMaster {
             informAndActivate(p, designatedLeader);
         } else {
             p.request.logLatency(ServerMetrics.getMetrics().QUORUM_ACK_LATENCY);
-            commit(zxid);
-            inform(p);
+            commit(zxid); // 对所有 Follower 发起 commit 请求
+            inform(p);    // 将请求发送给 Observer, 让 Observer 同步数据
         }
+        // 调用 CommitProcessor 的 commit 方法
         zk.commitProcessor.commit(p.request);
         if (pendingSyncs.containsKey(zxid)) {
             for (LearnerSyncRequest r : pendingSyncs.remove(zxid)) {
@@ -1018,6 +990,7 @@ public class Leader extends LearnerMaster {
 
         p.addAck(sid);
 
+        // 尝试 commit
         boolean hasCommitted = tryToCommit(p, zxid, followerAddr);
 
         // If p is a reconfiguration, multiple other operations may be ready to be committed,
@@ -1074,7 +1047,7 @@ public class Leader extends LearnerMaster {
          * @see org.apache.zookeeper.server.RequestProcessor#processRequest(org.apache.zookeeper.server.Request)
          */
         public void processRequest(Request request) throws RequestProcessorException {
-            next.processRequest(request);
+            next.processRequest(request); // 进入下一个处理器
 
             // The only requests that should be on toBeApplied are write
             // requests, for which we will have a hdr. We can't simply use
@@ -1115,7 +1088,7 @@ public class Leader extends LearnerMaster {
     void sendPacket(QuorumPacket qp) {
         synchronized (forwardingFollowers) {
             for (LearnerHandler f : forwardingFollowers) {
-                f.queuePacket(qp);
+                f.queuePacket(qp); // 下发
             }
         }
     }
@@ -1125,7 +1098,7 @@ public class Leader extends LearnerMaster {
      */
     void sendObserverPacket(QuorumPacket qp) {
         for (LearnerHandler f : getObservingLearners()) {
-            f.queuePacket(qp);
+            f.queuePacket(qp); // 下发
         }
     }
 
@@ -1250,7 +1223,7 @@ public class Leader extends LearnerMaster {
 
             lastProposed = p.packet.getZxid();
             outstandingProposals.put(lastProposed, p);
-            sendPacket(pp);
+            sendPacket(pp); // 向 Follower 发起提议 (通知 Follower 写入这个数据到事务日志)
         }
         ServerMetrics.getMetrics().PROPOSAL_COUNT.add(1);
         return p;

@@ -18,66 +18,19 @@
 
 package org.apache.zookeeper.server;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 import org.apache.jute.Record;
-import org.apache.zookeeper.ClientCnxn;
-import org.apache.zookeeper.KeeperException;
+import org.apache.zookeeper.*;
 import org.apache.zookeeper.KeeperException.Code;
 import org.apache.zookeeper.KeeperException.SessionMovedException;
-import org.apache.zookeeper.MultiOperationRecord;
-import org.apache.zookeeper.MultiResponse;
-import org.apache.zookeeper.Op;
-import org.apache.zookeeper.OpResult;
-import org.apache.zookeeper.OpResult.CheckResult;
-import org.apache.zookeeper.OpResult.CreateResult;
-import org.apache.zookeeper.OpResult.DeleteResult;
-import org.apache.zookeeper.OpResult.ErrorResult;
-import org.apache.zookeeper.OpResult.GetChildrenResult;
-import org.apache.zookeeper.OpResult.GetDataResult;
-import org.apache.zookeeper.OpResult.SetDataResult;
+import org.apache.zookeeper.OpResult.*;
 import org.apache.zookeeper.Watcher.WatcherType;
-import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.ZooDefs.OpCode;
 import org.apache.zookeeper.audit.AuditHelper;
 import org.apache.zookeeper.common.Time;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Id;
 import org.apache.zookeeper.data.Stat;
-import org.apache.zookeeper.proto.AddWatchRequest;
-import org.apache.zookeeper.proto.CheckWatchesRequest;
-import org.apache.zookeeper.proto.Create2Response;
-import org.apache.zookeeper.proto.CreateResponse;
-import org.apache.zookeeper.proto.ErrorResponse;
-import org.apache.zookeeper.proto.ExistsRequest;
-import org.apache.zookeeper.proto.ExistsResponse;
-import org.apache.zookeeper.proto.GetACLRequest;
-import org.apache.zookeeper.proto.GetACLResponse;
-import org.apache.zookeeper.proto.GetAllChildrenNumberRequest;
-import org.apache.zookeeper.proto.GetAllChildrenNumberResponse;
-import org.apache.zookeeper.proto.GetChildren2Request;
-import org.apache.zookeeper.proto.GetChildren2Response;
-import org.apache.zookeeper.proto.GetChildrenRequest;
-import org.apache.zookeeper.proto.GetChildrenResponse;
-import org.apache.zookeeper.proto.GetDataRequest;
-import org.apache.zookeeper.proto.GetDataResponse;
-import org.apache.zookeeper.proto.GetEphemeralsRequest;
-import org.apache.zookeeper.proto.GetEphemeralsResponse;
-import org.apache.zookeeper.proto.RemoveWatchesRequest;
-import org.apache.zookeeper.proto.ReplyHeader;
-import org.apache.zookeeper.proto.SetACLResponse;
-import org.apache.zookeeper.proto.SetDataResponse;
-import org.apache.zookeeper.proto.SetWatches;
-import org.apache.zookeeper.proto.SetWatches2;
-import org.apache.zookeeper.proto.SyncRequest;
-import org.apache.zookeeper.proto.SyncResponse;
-import org.apache.zookeeper.proto.WhoAmIResponse;
+import org.apache.zookeeper.proto.*;
 import org.apache.zookeeper.server.DataTree.ProcessTxnResult;
 import org.apache.zookeeper.server.quorum.QuorumZooKeeperServer;
 import org.apache.zookeeper.server.util.AuthUtil;
@@ -85,6 +38,12 @@ import org.apache.zookeeper.server.util.RequestPathMetricsCollector;
 import org.apache.zookeeper.txn.ErrorTxn;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.*;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * This Request processor actually applies any transaction associated with a
@@ -109,7 +68,7 @@ public class FinalRequestProcessor implements RequestProcessor {
     }
 
     private ProcessTxnResult applyRequest(Request request) {
-        ProcessTxnResult rc = zks.processTxn(request);
+        ProcessTxnResult rc = zks.processTxn(request); // 核心
 
         // ZOOKEEPER-558:
         // In some cases the server does not close the connection (e.g., closeconn buffer
@@ -156,7 +115,7 @@ public class FinalRequestProcessor implements RequestProcessor {
         }
         ProcessTxnResult rc = null;
         if (!request.isThrottled()) {
-          rc = applyRequest(request);
+          rc = applyRequest(request); // 核心
         }
         if (request.cnxn == null) {
             return;

@@ -1143,10 +1143,15 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             }
         }
         try {
-            touch(si.cnxn);
+            touch(si.cnxn); // 刷新 Session 有效期
             boolean validpacket = Request.isValid(si.type);
             if (validpacket) {
                 setLocalSessionFlag(si);
+                /*
+                 * 责任链模式 -> 子类会通过 setupRequestProcessors 初始化 firstProcessor
+                 * ZooKeeperServer
+                 * LeaderZooKeeperServer + LearnerZooKeeperServer (FollowerZooKeeperServer + ObserverZooKeeperServer)
+                 */
                 firstProcessor.processRequest(si);
                 if (si.cnxn != null) {
                     incInProcess();
@@ -1591,6 +1596,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
 
     public void processPacket(ServerCnxn cnxn, ByteBuffer incomingBuffer) throws IOException {
         // We have the request, now process and setup for next
+        // incomingBuffer 就是客户端发送时 createBB() 的结果
         InputStream bais = new ByteBufferInputStream(incomingBuffer);
         BinaryInputArchive bia = BinaryInputArchive.getArchive(bais);
         RequestHeader h = new RequestHeader();
@@ -1783,6 +1789,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             return new ProcessTxnResult();
         }
         synchronized (outstandingChanges) {
+            // 核心
             ProcessTxnResult rc = processTxnInDB(hdr, request.getTxn(), request.getTxnDigest());
 
             // request.hdr is set for write requests, which are the only ones
@@ -1833,7 +1840,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         if (hdr == null) {
             return new ProcessTxnResult();
         } else {
-            return getZKDatabase().processTxn(hdr, txn, digest);
+            return getZKDatabase().processTxn(hdr, txn, digest); // 核心
         }
     }
 

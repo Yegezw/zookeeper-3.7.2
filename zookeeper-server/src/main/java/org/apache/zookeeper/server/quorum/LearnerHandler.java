@@ -18,36 +18,11 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
-import java.io.IOException;
-import java.net.Socket;
-import java.nio.ByteBuffer;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Queue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
-import javax.security.sasl.SaslException;
 import org.apache.jute.BinaryInputArchive;
 import org.apache.jute.BinaryOutputArchive;
 import org.apache.zookeeper.ZooDefs.OpCode;
 import org.apache.zookeeper.common.Time;
-import org.apache.zookeeper.server.Request;
-import org.apache.zookeeper.server.ServerMetrics;
-import org.apache.zookeeper.server.TxnLogProposalIterator;
-import org.apache.zookeeper.server.ZKDatabase;
-import org.apache.zookeeper.server.ZooKeeperThread;
-import org.apache.zookeeper.server.ZooTrace;
+import org.apache.zookeeper.server.*;
 import org.apache.zookeeper.server.quorum.Leader.Proposal;
 import org.apache.zookeeper.server.quorum.QuorumPeer.LearnerType;
 import org.apache.zookeeper.server.quorum.auth.QuorumAuthServer;
@@ -57,6 +32,19 @@ import org.apache.zookeeper.server.util.ZxidUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.security.sasl.SaslException;
+import java.io.*;
+import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.util.*;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
+
+// 每个跟随者一个
 /**
  * There will be an instance of this class created by the Leader for each
  * learner. All communication with a learner is handled by this
@@ -333,7 +321,7 @@ public class LearnerHandler extends ZooKeeperThread {
                 p = queuedPackets.poll();
                 if (p == null) {
                     bufferedOutput.flush();
-                    p = queuedPackets.take();
+                    p = queuedPackets.take(); // 拿出数据
                 }
 
                 ServerMetrics.getMetrics().LEARNER_HANDLER_QP_SIZE.add(Long.toString(this.sid), queuedPackets.size());
@@ -364,6 +352,7 @@ public class LearnerHandler extends ZooKeeperThread {
                 if (p.getZxid() > 0) {
                     lastZxid = p.getZxid();
                 }
+                // 发送数据
                 oa.writeRecord(p, "packet");
                 packetsSent.incrementAndGet();
                 messageTracker.trackSent(p.getType());
@@ -747,7 +736,7 @@ public class LearnerHandler extends ZooKeeperThread {
                 public void run() {
                     Thread.currentThread().setName("Sender-" + sock.getRemoteSocketAddress());
                     try {
-                        sendPackets();
+                        sendPackets(); // 发送数据包
                     } catch (InterruptedException e) {
                         LOG.warn("Unexpected interruption", e);
                     }
@@ -1090,6 +1079,7 @@ public class LearnerHandler extends ZooKeeperThread {
     }
 
     void queuePacket(QuorumPacket p) {
+        // 加入队列
         queuedPackets.add(p);
         // Add a MarkerQuorumPacket at regular intervals.
         if (shouldSendMarkerPacketForLogging() && packetCounter.getAndIncrement() % markerPacketInterval == 0) {

@@ -19,26 +19,16 @@
 package org.apache.zookeeper.server.quorum;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.zookeeper.ZooDefs.OpCode;
 import org.apache.zookeeper.common.Time;
-import org.apache.zookeeper.server.ExitCode;
-import org.apache.zookeeper.server.Request;
-import org.apache.zookeeper.server.RequestProcessor;
-import org.apache.zookeeper.server.ServerMetrics;
-import org.apache.zookeeper.server.WorkerService;
-import org.apache.zookeeper.server.ZooKeeperCriticalThread;
-import org.apache.zookeeper.server.ZooKeeperServerListener;
+import org.apache.zookeeper.server.*;
 import org.apache.zookeeper.util.ServiceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.*;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * This RequestProcessor matches the incoming committed requests with the
@@ -219,7 +209,7 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements RequestP
                     if (requestsToProcess == 0 && !commitIsWaiting) {
                         // Waiting for requests to process
                         while (!stopped && requestsToProcess == 0 && !commitIsWaiting) {
-                            wait();
+                            wait(); // 阻塞住, 等待 commit() 唤醒
                             commitIsWaiting = !committedRequests.isEmpty();
                             requestsToProcess = queuedRequests.size();
                         }
@@ -377,7 +367,7 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements RequestP
                         commitsProcessed++;
 
                         // Process the write inline.
-                        processWrite(request);
+                        processWrite(request); // 被唤醒后, 经过前面一顿拼凑协议, 然后进入下一个处理器
 
                         commitIsWaiting = !committedRequests.isEmpty();
                     }
@@ -594,8 +584,8 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements RequestP
         LOG.debug("Committing request:: {}", request);
         request.commitRecvTime = Time.currentElapsedTime();
         ServerMetrics.getMetrics().COMMITS_QUEUED.add(1);
-        committedRequests.add(request);
-        wakeup();
+        committedRequests.add(request); // 放到 commit 内存队列
+        wakeup(); // 唤醒全部线程
     }
 
     @Override
@@ -605,7 +595,7 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements RequestP
         }
         LOG.debug("Processing request:: {}", request);
         request.commitProcQueueStartTime = Time.currentElapsedTime();
-        queuedRequests.add(request);
+        queuedRequests.add(request); // 加入队列
         // If the request will block, add it to the queue of blocking requests
         if (needCommit(request)) {
             queuedWriteRequests.add(request);

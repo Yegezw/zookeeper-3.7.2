@@ -18,39 +18,17 @@
 
 package org.apache.zookeeper.server;
 
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.jute.InputArchive;
 import org.apache.jute.OutputArchive;
 import org.apache.jute.Record;
-import org.apache.zookeeper.DigestWatcher;
-import org.apache.zookeeper.KeeperException;
+import org.apache.zookeeper.*;
 import org.apache.zookeeper.KeeperException.Code;
 import org.apache.zookeeper.KeeperException.NoNodeException;
 import org.apache.zookeeper.KeeperException.NodeExistsException;
-import org.apache.zookeeper.Quotas;
-import org.apache.zookeeper.StatsTrack;
-import org.apache.zookeeper.WatchedEvent;
-import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.Watcher.Event;
 import org.apache.zookeeper.Watcher.Event.EventType;
 import org.apache.zookeeper.Watcher.Event.KeeperState;
 import org.apache.zookeeper.Watcher.WatcherType;
-import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.ZooDefs.OpCode;
 import org.apache.zookeeper.audit.AuditConstants;
 import org.apache.zookeeper.audit.AuditEvent.Result;
@@ -59,29 +37,20 @@ import org.apache.zookeeper.common.PathTrie;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Stat;
 import org.apache.zookeeper.data.StatPersisted;
-import org.apache.zookeeper.server.watch.IWatchManager;
-import org.apache.zookeeper.server.watch.WatchManagerFactory;
-import org.apache.zookeeper.server.watch.WatcherMode;
-import org.apache.zookeeper.server.watch.WatcherOrBitSet;
-import org.apache.zookeeper.server.watch.WatchesPathReport;
-import org.apache.zookeeper.server.watch.WatchesReport;
-import org.apache.zookeeper.server.watch.WatchesSummary;
-import org.apache.zookeeper.txn.CheckVersionTxn;
-import org.apache.zookeeper.txn.CloseSessionTxn;
-import org.apache.zookeeper.txn.CreateContainerTxn;
-import org.apache.zookeeper.txn.CreateTTLTxn;
-import org.apache.zookeeper.txn.CreateTxn;
-import org.apache.zookeeper.txn.DeleteTxn;
-import org.apache.zookeeper.txn.ErrorTxn;
-import org.apache.zookeeper.txn.MultiTxn;
-import org.apache.zookeeper.txn.SetACLTxn;
-import org.apache.zookeeper.txn.SetDataTxn;
-import org.apache.zookeeper.txn.Txn;
-import org.apache.zookeeper.txn.TxnDigest;
-import org.apache.zookeeper.txn.TxnHeader;
+import org.apache.zookeeper.server.watch.*;
+import org.apache.zookeeper.txn.*;
 import org.apache.zookeeper.util.ServiceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.ByteBuffer;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * This class maintains the tree data structure. It doesn't have any networking
@@ -102,7 +71,7 @@ public class DataTree {
      * This map provides a fast lookup to the datanodes. The tree is the
      * source of truth and is where all the locking occurs
      */
-    private final NodeHashMap nodes;
+    private final NodeHashMap nodes; // 内存节点树
 
     private IWatchManager dataWatches;
 
@@ -482,11 +451,11 @@ public class DataTree {
                 parent.stat.setCversion(parentCVersion);
                 parent.stat.setPzxid(zxid);
             }
-            DataNode child = new DataNode(data, longval, stat);
+            DataNode child = new DataNode(data, longval, stat); // 创建数据节点
             parent.addChild(childName);
             nodes.postChange(parentName, parent);
             nodeDataSize.addAndGet(getNodeSize(path, child.data));
-            nodes.put(path, child);
+            nodes.put(path, child);                             // 将数据节点放到 nodes 里, path 作为 key (数据最终写到了这个内存里)
             EphemeralType ephemeralType = EphemeralType.get(ephemeralOwner);
             if (ephemeralType == EphemeralType.CONTAINER) {
                 containers.add(path);
@@ -846,7 +815,7 @@ public class DataTree {
     public volatile long lastProcessedZxid = 0;
 
     public ProcessTxnResult processTxn(TxnHeader header, Record txn, TxnDigest digest) {
-        ProcessTxnResult result = processTxn(header, txn);
+        ProcessTxnResult result = processTxn(header, txn); // 核心
         compareDigest(header, txn, digest);
         return result;
     }
@@ -869,6 +838,7 @@ public class DataTree {
             case OpCode.create:
                 CreateTxn createTxn = (CreateTxn) txn;
                 rc.path = createTxn.getPath();
+                // 创建节点并保存到内存节点树中
                 createNode(
                     createTxn.getPath(),
                     createTxn.getData(),

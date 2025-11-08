@@ -18,7 +18,6 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import java.io.IOException;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.ZooDefs.OpCode;
 import org.apache.zookeeper.server.Request;
@@ -26,6 +25,8 @@ import org.apache.zookeeper.server.RequestProcessor;
 import org.apache.zookeeper.txn.ErrorTxn;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
 
 /**
  * Responsible for performing local session upgrade. Only request submitted
@@ -55,6 +56,7 @@ public class LeaderRequestProcessor implements RequestProcessor {
         // an ephemeral node, in which case we upgrade the session
         Request upgradeRequest = null;
         try {
+            // 检查 Session 是否过期
             upgradeRequest = lzks.checkUpgradeSession(request);
         } catch (KeeperException ke) {
             if (request.getHdr() != null) {
@@ -67,6 +69,7 @@ public class LeaderRequestProcessor implements RequestProcessor {
         } catch (IOException ie) {
             LOG.error("Unexpected error in upgrade", ie);
         }
+        // Session 验证通过的话, 进入下一个处理器
         if (upgradeRequest != null) {
             nextProcessor.processRequest(upgradeRequest);
         }

@@ -18,23 +18,16 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import java.io.IOException;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
-import javax.management.JMException;
 import org.apache.zookeeper.KeeperException.SessionExpiredException;
 import org.apache.zookeeper.jmx.MBeanRegistry;
 import org.apache.zookeeper.metrics.MetricsContext;
-import org.apache.zookeeper.server.ContainerManager;
-import org.apache.zookeeper.server.DataTreeBean;
-import org.apache.zookeeper.server.FinalRequestProcessor;
-import org.apache.zookeeper.server.PrepRequestProcessor;
-import org.apache.zookeeper.server.Request;
-import org.apache.zookeeper.server.RequestProcessor;
-import org.apache.zookeeper.server.ServerCnxn;
-import org.apache.zookeeper.server.ServerMetrics;
-import org.apache.zookeeper.server.ZKDatabase;
+import org.apache.zookeeper.server.*;
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
+
+import javax.management.JMException;
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 /**
  *
@@ -64,10 +57,24 @@ public class LeaderZooKeeperServer extends QuorumZooKeeperServer {
 
     @Override
     protected void setupRequestProcessors() {
+        /*
+         * ZooKeeperServer#submitRequestNow 刷新 Session 有效期 -> firstProcessor.processRequest() [ZooKeeperServer 子类填充责任链]
+         *    LeaderRequestProcessor                检查 Session 是否过期 + next
+         * -> PrepRequestProcessor                  队列 + 封装请求并设置 zxid + next
+         * -> ProposalRequestProcessor              next + 向 Follower 发起提议 + SyncRequestProcessor
+         * -> CommitProcessor                       队列 + 阻塞住 + 等待 Follower 过半 ack 后被 AckRequestProcessor 唤醒 + 拼凑协议 + next
+         * -> Leader.ToBeAppliedRequestProcessor    next
+         * -> FinalRequestProcessor                 创建数据节点, 将数据写到内存节点树 (NodeHashMap) 中
+         *
+         *    SyncRequestProcessor                  队列 + 数据写入本地事务日志文件 + next
+         * -> AckRequestProcessor                   给自己记一票 + leader.processAck: Follower 过半 ack 后 commit + 对所有 Follower 发起 commit 请求 + 对所有 Observer 发起 inform 请求 + 唤醒 CommitProcessor
+         *
+         * Leader 通过 LearnerHandler 与 Follower Observer 通信
+         */
         RequestProcessor finalProcessor = new FinalRequestProcessor(this);
         RequestProcessor toBeAppliedProcessor = new Leader.ToBeAppliedRequestProcessor(finalProcessor, getLeader());
         commitProcessor = new CommitProcessor(toBeAppliedProcessor, Long.toString(getServerId()), false, getZooKeeperServerListener());
-        commitProcessor.start();
+        commitProcessor.start(); // 阻塞住
         ProposalRequestProcessor proposalProcessor = new ProposalRequestProcessor(this, commitProcessor);
         proposalProcessor.initialize();
         prepRequestProcessor = new PrepRequestProcessor(this, proposalProcessor);

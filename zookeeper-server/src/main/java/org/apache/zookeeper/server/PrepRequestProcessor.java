@@ -18,30 +18,11 @@
 
 package org.apache.zookeeper.server;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.StringReader;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.LinkedBlockingQueue;
 import org.apache.jute.BinaryOutputArchive;
 import org.apache.jute.Record;
-import org.apache.zookeeper.CreateMode;
-import org.apache.zookeeper.KeeperException;
+import org.apache.zookeeper.*;
 import org.apache.zookeeper.KeeperException.BadArgumentsException;
 import org.apache.zookeeper.KeeperException.Code;
-import org.apache.zookeeper.MultiOperationRecord;
-import org.apache.zookeeper.Op;
-import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.ZooDefs.OpCode;
 import org.apache.zookeeper.common.PathUtils;
 import org.apache.zookeeper.common.StringUtils;
@@ -49,13 +30,7 @@ import org.apache.zookeeper.common.Time;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Id;
 import org.apache.zookeeper.data.StatPersisted;
-import org.apache.zookeeper.proto.CheckVersionRequest;
-import org.apache.zookeeper.proto.CreateRequest;
-import org.apache.zookeeper.proto.CreateTTLRequest;
-import org.apache.zookeeper.proto.DeleteRequest;
-import org.apache.zookeeper.proto.ReconfigRequest;
-import org.apache.zookeeper.proto.SetACLRequest;
-import org.apache.zookeeper.proto.SetDataRequest;
+import org.apache.zookeeper.proto.*;
 import org.apache.zookeeper.server.ZooKeeperServer.ChangeRecord;
 import org.apache.zookeeper.server.ZooKeeperServer.PrecalculatedDigest;
 import org.apache.zookeeper.server.auth.ProviderRegistry;
@@ -66,22 +41,18 @@ import org.apache.zookeeper.server.quorum.QuorumPeerConfig;
 import org.apache.zookeeper.server.quorum.QuorumPeerConfig.ConfigException;
 import org.apache.zookeeper.server.quorum.flexible.QuorumMaj;
 import org.apache.zookeeper.server.quorum.flexible.QuorumVerifier;
-import org.apache.zookeeper.txn.CheckVersionTxn;
-import org.apache.zookeeper.txn.CloseSessionTxn;
-import org.apache.zookeeper.txn.CreateContainerTxn;
-import org.apache.zookeeper.txn.CreateSessionTxn;
-import org.apache.zookeeper.txn.CreateTTLTxn;
-import org.apache.zookeeper.txn.CreateTxn;
-import org.apache.zookeeper.txn.DeleteTxn;
-import org.apache.zookeeper.txn.ErrorTxn;
-import org.apache.zookeeper.txn.MultiTxn;
-import org.apache.zookeeper.txn.SetACLTxn;
-import org.apache.zookeeper.txn.SetDataTxn;
-import org.apache.zookeeper.txn.Txn;
-import org.apache.zookeeper.txn.TxnDigest;
-import org.apache.zookeeper.txn.TxnHeader;
+import org.apache.zookeeper.txn.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.StringReader;
+import java.nio.ByteBuffer;
+import java.util.*;
+import java.util.concurrent.LinkedBlockingQueue;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * This request processor is generally at the start of a RequestProcessor
@@ -138,6 +109,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
         try {
             while (true) {
                 ServerMetrics.getMetrics().PREP_PROCESSOR_QUEUE_SIZE.add(submittedRequests.size());
+                // 拿出请求
                 Request request = submittedRequests.take();
                 ServerMetrics.getMetrics().PREP_PROCESSOR_QUEUE_TIME
                     .add(Time.currentElapsedTime() - request.prepQueueStartTime);
@@ -153,7 +125,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
                 }
 
                 request.prepStartTime = Time.currentElapsedTime();
-                pRequest(request);
+                pRequest(request); // 处理请求
             }
         } catch (Exception e) {
             handleException(this.getName(), e);
@@ -769,14 +741,16 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
         request.setHdr(null);
         request.setTxn(null);
 
+        // 根据请求类型的不同 (create delete update 等) 对请求进行封装和逻辑处理
         if (!request.isThrottled()) {
-          pRequestHelper(request);
+            pRequestHelper(request);
         }
 
+        // 给请求设置一个 zxid
         request.zxid = zks.getZxid();
         long timeFinishedPrepare = Time.currentElapsedTime();
         ServerMetrics.getMetrics().PREP_PROCESS_TIME.add(timeFinishedPrepare - request.prepStartTime);
-        nextProcessor.processRequest(request);
+        nextProcessor.processRequest(request); // 进入下一个处理器
         ServerMetrics.getMetrics().PROPOSAL_PROCESS_TIME.add(Time.currentElapsedTime() - timeFinishedPrepare);
     }
 
@@ -1058,7 +1032,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
 
     public void processRequest(Request request) {
         request.prepQueueStartTime = Time.currentElapsedTime();
-        submittedRequests.add(request);
+        submittedRequests.add(request); // 加入队列
         ServerMetrics.getMetrics().PREP_PROCESSOR_QUEUED.add(1);
     }
 
