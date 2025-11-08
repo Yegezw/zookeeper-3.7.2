@@ -18,26 +18,23 @@
 
 package org.apache.zookeeper;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.net.SocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.SocketChannel;
-import java.nio.channels.UnresolvedAddressException;
-import java.nio.channels.UnsupportedAddressTypeException;
-import java.util.Iterator;
-import java.util.Queue;
-import java.util.Set;
-import java.util.concurrent.LinkedBlockingDeque;
 import org.apache.zookeeper.ClientCnxn.EndOfStreamException;
 import org.apache.zookeeper.ClientCnxn.Packet;
 import org.apache.zookeeper.ZooDefs.OpCode;
 import org.apache.zookeeper.client.ZKClientConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.*;
+import java.util.Iterator;
+import java.util.Queue;
+import java.util.Set;
+import java.util.concurrent.LinkedBlockingDeque;
 
 public class ClientCnxnSocketNIO extends ClientCnxnSocket {
 
@@ -70,6 +67,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
         if (sock == null) {
             throw new IOException("Socket is null!");
         }
+        // 接收到服务端响应
         if (sockKey.isReadable()) {
             int rc = sock.read(incomingBuffer);
             if (rc < 0) {
@@ -102,8 +100,9 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                 }
             }
         }
+        // 向服务端发送请求
         if (sockKey.isWritable()) {
-            Packet p = findSendablePacket(outgoingQueue, sendThread.tunnelAuthInProgress());
+            Packet p = findSendablePacket(outgoingQueue, sendThread.tunnelAuthInProgress()); // 从 outgoingQueue 拿出一个包
 
             if (p != null) {
                 updateLastSend();
@@ -114,9 +113,9 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                         && (p.requestHeader.getType() != OpCode.auth)) {
                         p.requestHeader.setXid(cnxn.getXid());
                     }
-                    p.createBB();
+                    p.createBB(); // 构造 ByteBuffer 对象
                 }
-                sock.write(p.bb);
+                sock.write(p.bb); // 发送
                 if (!p.bb.hasRemaining()) {
                     sentCount.getAndIncrement();
                     outgoingQueue.removeFirstOccurrence(p);
