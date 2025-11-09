@@ -67,9 +67,10 @@ public class LeaderZooKeeperServer extends QuorumZooKeeperServer {
          * -> FinalRequestProcessor                 创建数据节点, 将数据写到内存节点树 (NodeHashMap) 中
          *
          *    SyncRequestProcessor                  队列 + 数据写入本地事务日志文件 + next
-         * -> AckRequestProcessor                   给自己记一票 + leader.processAck: Follower 过半 ack 后 commit + 对所有 Follower 发起 commit 请求 + 对所有 Observer 发起 inform 请求 + 唤醒 CommitProcessor
+         * -> AckRequestProcessor                   给自己记一票 + Leader.processAck -> Leader.tryToCommit -> 过半 ack 则 CommitProcessor.commit
          *
-         * Leader 通过 LearnerHandler 与 Follower Observer 通信
+         * Leader 通过 LearnerHandler 与 Follower Observer 通信, 当 Leader 收到 Follower ack 后会调用 Leader.processAck
+         * Leader.processAck: Follower 过半 ack 后 commit + 对所有 Follower 发起 commit 请求 + 对所有 Observer 发起 inform 请求 + 唤醒 CommitProcessor
          */
         RequestProcessor finalProcessor = new FinalRequestProcessor(this);
         RequestProcessor toBeAppliedProcessor = new Leader.ToBeAppliedRequestProcessor(finalProcessor, getLeader());

@@ -18,14 +18,15 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import java.io.Flushable;
-import java.io.IOException;
 import org.apache.zookeeper.ZooDefs.OpCode;
 import org.apache.zookeeper.server.Request;
 import org.apache.zookeeper.server.RequestProcessor;
 import org.apache.zookeeper.server.ServerMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.Flushable;
+import java.io.IOException;
 
 public class SendAckRequestProcessor implements RequestProcessor, Flushable {
 
@@ -43,7 +44,7 @@ public class SendAckRequestProcessor implements RequestProcessor, Flushable {
             try {
                 si.logLatency(ServerMetrics.getMetrics().PROPOSAL_ACK_CREATION_LATENCY);
 
-                learner.writePacket(qp, false);
+                learner.writePacket(qp, false); // 回复 Leader ack 给自己记一票
             } catch (IOException e) {
                 LOG.warn("Closing connection to leader, exception during packet send", e);
                 try {

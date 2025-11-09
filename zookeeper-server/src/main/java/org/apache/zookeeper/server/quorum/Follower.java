@@ -158,10 +158,10 @@ public class Follower extends Learner {
      */
     protected void processPacket(QuorumPacket qp) throws Exception {
         switch (qp.getType()) {
-        case Leader.PING:
+        case Leader.PING: // 心跳请求, 续期 Session
             ping(qp);
             break;
-        case Leader.PROPOSAL:
+        case Leader.PROPOSAL: // Leader 发来的 propose 请求
             ServerMetrics.getMetrics().LEARNER_PROPOSAL_RECEIVED_COUNT.add(1);
             TxnLogEntry logEntry = SerializeUtils.deserializeTxn(qp.getData());
             TxnHeader hdr = logEntry.getHeader();
@@ -181,7 +181,7 @@ public class Follower extends Learner {
                 self.setLastSeenQuorumVerifier(qv, true);
             }
 
-            fzk.logRequest(hdr, txn, digest);
+            fzk.logRequest(hdr, txn, digest); // 核心
             if (hdr != null) {
                 /*
                  * Request header is created only by the leader, so this is only set
@@ -200,7 +200,7 @@ public class Follower extends Learner {
                 ServerMetrics.getMetrics().OM_PROPOSAL_PROCESS_TIME.add(Time.currentElapsedTime() - startTime);
             }
             break;
-        case Leader.COMMIT:
+        case Leader.COMMIT: // Leader 发来的 commit 请求
             ServerMetrics.getMetrics().LEARNER_COMMIT_RECEIVED_COUNT.add(1);
             fzk.commit(qp.getZxid());
             if (om != null) {

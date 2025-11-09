@@ -18,26 +18,21 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import java.io.IOException;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import javax.management.JMException;
 import org.apache.jute.Record;
 import org.apache.zookeeper.jmx.MBeanRegistry;
 import org.apache.zookeeper.metrics.MetricsContext;
-import org.apache.zookeeper.server.ExitCode;
-import org.apache.zookeeper.server.FinalRequestProcessor;
-import org.apache.zookeeper.server.Request;
-import org.apache.zookeeper.server.RequestProcessor;
-import org.apache.zookeeper.server.ServerMetrics;
-import org.apache.zookeeper.server.SyncRequestProcessor;
-import org.apache.zookeeper.server.ZKDatabase;
+import org.apache.zookeeper.server.*;
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
 import org.apache.zookeeper.txn.TxnDigest;
 import org.apache.zookeeper.txn.TxnHeader;
 import org.apache.zookeeper.util.ServiceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.management.JMException;
+import java.io.IOException;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * Just like the standard ZooKeeperServer. We just replace the request
@@ -68,24 +63,37 @@ public class FollowerZooKeeperServer extends LearnerZooKeeperServer {
 
     @Override
     protected void setupRequestProcessors() {
+        /*
+         *    FollowerRequestProcessor
+         * -> CommitProcessor             队列 + 阻塞住 + 等待 Leader 发送 commit 进入 this.commit() 唤醒 + 拼凑协议 + next
+         * -> FinalRequestProcessor       创建数据节点, 将数据写到内存节点树 (NodeHashMap) 中
+         *
+         *    SyncRequestProcessor        队列 + 数据写入本地事务日志文件 + next
+         * -> SendAckRequestProcessor     回复 Leader ack 给自己记一票
+         */
         RequestProcessor finalProcessor = new FinalRequestProcessor(this);
         commitProcessor = new CommitProcessor(finalProcessor, Long.toString(getServerId()), true, getZooKeeperServerListener());
-        commitProcessor.start();
+        commitProcessor.start(); // 阻塞住
         firstProcessor = new FollowerRequestProcessor(this, commitProcessor);
         ((FollowerRequestProcessor) firstProcessor).start();
         syncProcessor = new SyncRequestProcessor(this, new SendAckRequestProcessor(getFollower()));
         syncProcessor.start();
     }
 
+    /**
+     * 待 commit 的 zxid
+     */
     LinkedBlockingQueue<Request> pendingTxns = new LinkedBlockingQueue<Request>();
 
     public void logRequest(TxnHeader hdr, Record txn, TxnDigest digest) {
         Request request = new Request(hdr.getClientId(), hdr.getCxid(), hdr.getType(), hdr, txn, hdr.getZxid());
         request.setTxnDigest(digest);
         if ((request.zxid & 0xffffffffL) != 0) {
-            pendingTxns.add(request);
+            pendingTxns.add(request); // 加入队列, 等待 Leader 发送 commit
         }
-        syncProcessor.processRequest(request);
+        syncProcessor.processRequest(request); // 责任链
+        // 将 Leader 提议的数据写入本地事务日志文件 + 回复 Leader ack 给自己记一票
+        // Leader 收到 Follower 集群返回过半的 ack 后, 会再次发起 commit 请求给 Follower, 会进入 this.commit() 进行处理
     }
 
     /**
@@ -101,13 +109,15 @@ public class FollowerZooKeeperServer extends LearnerZooKeeperServer {
         }
         long firstElementZxid = pendingTxns.element().zxid;
         if (firstElementZxid != zxid) {
+            // 数据一致性异常
             LOG.error("Committing zxid 0x" + Long.toHexString(zxid)
                       + " but next pending txn 0x" + Long.toHexString(firstElementZxid));
+            // 终止进程
             ServiceUtils.requestSystemExit(ExitCode.UNMATCHED_TXN_COMMIT.getValue());
         }
-        Request request = pendingTxns.remove();
+        Request request = pendingTxns.remove(); // 移除队列头
         request.logLatency(ServerMetrics.getMetrics().COMMIT_PROPAGATION_LATENCY);
-        commitProcessor.commit(request);
+        commitProcessor.commit(request); // 提交, 会唤醒 commitProcessor.run() 将数据写到内存节点树
     }
 
     public synchronized void sync() {

@@ -666,7 +666,7 @@ public class LearnerHandler extends ZooKeeperThread {
                         LOG.debug("Received ACK from Observer {}", this.sid);
                     }
                     syncLimitCheck.updateAck(qp.getZxid());
-                    learnerMaster.processAck(this.sid, qp.getZxid(), sock.getLocalSocketAddress());
+                    learnerMaster.processAck(this.sid, qp.getZxid(), sock.getLocalSocketAddress()); // Leader 收到 Follower ack
                     break;
                 case Leader.PING:
                     // Process the touches
