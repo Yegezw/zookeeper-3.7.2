@@ -18,17 +18,14 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import java.io.IOException;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.BiConsumer;
-import org.apache.zookeeper.server.FinalRequestProcessor;
-import org.apache.zookeeper.server.Request;
-import org.apache.zookeeper.server.RequestProcessor;
-import org.apache.zookeeper.server.SyncRequestProcessor;
-import org.apache.zookeeper.server.ZKDatabase;
+import org.apache.zookeeper.server.*;
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.BiConsumer;
 
 /**
  * A ZooKeeperServer for the Observer node type. Not much is different, but
@@ -73,6 +70,9 @@ public class ObserverZooKeeperServer extends LearnerZooKeeperServer {
      * @param request
      */
     public void commitRequest(Request request) {
+        // 先看是否配置了 Observer 允许写事务日志
+        // 允许就调用 SyncRequestProcessor 将数据写入本地事务日志文件
+        // 然后通过 CommitProcessor 创建数据节点, 将数据写到内存节点树中
         if (syncRequestProcessorEnabled) {
             // Write to txnlog and take periodic snapshot
             syncProcessor.processRequest(request);
@@ -86,12 +86,19 @@ public class ObserverZooKeeperServer extends LearnerZooKeeperServer {
      */
     @Override
     protected void setupRequestProcessors() {
+        /*
+         *    ObserverRequestProcessor
+         * -> CommitProcessor             队列 + 阻塞住 + 等待 Leader 发送 inform 进入 this.commitRequest() 唤醒 + 拼凑协议 + next
+         * -> FinalRequestProcessor       创建数据节点, 将数据写到内存节点树 (NodeHashMap) 中
+         *
+         *    SyncRequestProcessor        队列 + 数据写入本地事务日志文件
+         */
         // We might consider changing the processor behaviour of
         // Observers to, for example, remove the disk sync requirements.
         // Currently, they behave almost exactly the same as followers.
         RequestProcessor finalProcessor = new FinalRequestProcessor(this);
         commitProcessor = new CommitProcessor(finalProcessor, Long.toString(getServerId()), true, getZooKeeperServerListener());
-        commitProcessor.start();
+        commitProcessor.start(); // 阻塞住
         firstProcessor = new ObserverRequestProcessor(this, commitProcessor);
         ((ObserverRequestProcessor) firstProcessor).start();
 

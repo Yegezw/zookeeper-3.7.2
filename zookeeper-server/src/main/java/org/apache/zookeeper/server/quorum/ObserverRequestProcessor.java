@@ -18,18 +18,15 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import java.io.IOException;
-import java.util.concurrent.LinkedBlockingQueue;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.ZooDefs.OpCode;
-import org.apache.zookeeper.server.Request;
-import org.apache.zookeeper.server.RequestProcessor;
-import org.apache.zookeeper.server.ServerMetrics;
-import org.apache.zookeeper.server.ZooKeeperCriticalThread;
-import org.apache.zookeeper.server.ZooTrace;
+import org.apache.zookeeper.server.*;
 import org.apache.zookeeper.txn.ErrorTxn;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * This RequestProcessor forwards any requests that modify the state of the
@@ -67,7 +64,7 @@ public class ObserverRequestProcessor extends ZooKeeperCriticalThread implements
             while (!finished) {
                 ServerMetrics.getMetrics().LEARNER_REQUEST_PROCESSOR_QUEUE_SIZE.add(queuedRequests.size());
 
-                Request request = queuedRequests.take();
+                Request request = queuedRequests.take(); // 拿出请求
                 if (LOG.isTraceEnabled()) {
                     ZooTrace.logRequest(LOG, ZooTrace.CLIENT_REQUEST_TRACE_MASK, 'F', request, "");
                 }
@@ -94,6 +91,7 @@ public class ObserverRequestProcessor extends ZooKeeperCriticalThread implements
                 // path, but different from others, we need to keep track
                 // of the sync operations this Observer has pending, so we
                 // add it to pendingSyncs.
+                // 转发给 Leader 处理请求
                 switch (request.type) {
                 case OpCode.sync:
                     zks.pendingSyncs.add(request);
@@ -150,7 +148,7 @@ public class ObserverRequestProcessor extends ZooKeeperCriticalThread implements
             if (upgradeRequest != null) {
                 queuedRequests.add(upgradeRequest);
             }
-            queuedRequests.add(request);
+            queuedRequests.add(request); // 加入队列
         }
     }
 

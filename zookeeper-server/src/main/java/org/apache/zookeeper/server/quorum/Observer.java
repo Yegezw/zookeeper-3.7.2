@@ -183,13 +183,13 @@ public class Observer extends Learner {
         TxnDigest digest;
         Record txn;
         switch (qp.getType()) {
-        case Leader.PING:
+        case Leader.PING: // 心跳请求, 续期 Session
             ping(qp);
             break;
-        case Leader.PROPOSAL:
+        case Leader.PROPOSAL: // 不处理 propose 请求
             LOG.warn("Ignoring proposal");
             break;
-        case Leader.COMMIT:
+        case Leader.COMMIT: // 不处理 commit 请求
             LOG.warn("Ignoring commit");
             break;
         case Leader.UPTODATE:
@@ -201,9 +201,9 @@ public class Observer extends Learner {
         case Leader.SYNC:
             ((ObserverZooKeeperServer) zk).sync();
             break;
-        case Leader.INFORM:
+        case Leader.INFORM: // Leader 发来的 inform 请求
             ServerMetrics.getMetrics().LEARNER_COMMIT_RECEIVED_COUNT.add(1);
-            logEntry = SerializeUtils.deserializeTxn(qp.getData());
+            logEntry = SerializeUtils.deserializeTxn(qp.getData()); // 封装协议
             hdr = logEntry.getHeader();
             txn = logEntry.getTxn();
             digest = logEntry.getDigest();
@@ -211,7 +211,7 @@ public class Observer extends Learner {
             request.logLatency(ServerMetrics.getMetrics().COMMIT_PROPAGATION_LATENCY);
             request.setTxnDigest(digest);
             ObserverZooKeeperServer obs = (ObserverZooKeeperServer) zk;
-            obs.commitRequest(request);
+            obs.commitRequest(request); // 处理请求
             break;
         case Leader.INFORMANDACTIVATE:
             // get new designated leader from (current) leader's message
