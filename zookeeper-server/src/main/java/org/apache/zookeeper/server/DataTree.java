@@ -462,6 +462,7 @@ public class DataTree {
             } else if (ephemeralType == EphemeralType.TTL) {
                 ttls.add(path);
             } else if (ephemeralOwner != 0) {
+                // 临时节点 sessionId -> Set<Path>
                 HashSet<String> list = ephemerals.get(ephemeralOwner);
                 if (list == null) {
                     list = new HashSet<String>();

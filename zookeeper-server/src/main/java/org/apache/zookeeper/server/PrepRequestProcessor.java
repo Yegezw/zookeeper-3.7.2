@@ -300,10 +300,12 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
         case OpCode.create2:
         case OpCode.createTTL:
         case OpCode.createContainer: {
+            // 增
             pRequest2TxnCreate(type, request, record, deserialize);
             break;
         }
         case OpCode.deleteContainer: {
+            // 删
             String path = new String(request.request.array(), UTF_8);
             String parentPath = getParentPathAndValidate(path);
             ChangeRecord nodeRecord = getRecordForPath(path);
@@ -329,6 +331,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
             break;
         }
         case OpCode.delete:
+            // 删
             zks.sessionTracker.checkSession(request.sessionId, request.getOwner());
             DeleteRequest deleteRequest = (DeleteRequest) record;
             if (deserialize) {
@@ -357,6 +360,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
             addChangeRecord(nodeRecord);
             break;
         case OpCode.setData:
+            // 改
             zks.sessionTracker.checkSession(request.sessionId, request.getOwner());
             SetDataRequest setDataRequest = (SetDataRequest) record;
             if (deserialize) {
@@ -543,6 +547,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
             addChangeRecord(nodeRecord);
             break;
         case OpCode.createSession:
+            // 新建连接
             request.request.rewind();
             int to = request.request.getInt();
             request.setTxn(new CreateSessionTxn(to));
@@ -552,6 +557,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
             zks.setOwner(request.sessionId, request.getOwner());
             break;
         case OpCode.closeSession:
+            // 关闭连接
             // We don't want to do this check since the session expiration thread
             // queues up this operation without being the session owner.
             // this request is the last of the session so it should be ok
@@ -562,11 +568,11 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
                 // synchronized block, otherwise there will be a race
                 // condition with the on flying deleteNode txn, and we'll
                 // delete the node again here, which is not correct
-                Set<String> es = zks.getZKDatabase().getEphemerals(request.sessionId);
+                Set<String> es = zks.getZKDatabase().getEphemerals(request.sessionId); // 根据 SessionId 找到全部临时节点
                 for (ChangeRecord c : zks.outstandingChanges) {
                     if (c.stat == null) {
                         // Doing a delete
-                        es.remove(c.path);
+                        es.remove(c.path); // 移除临时节点
                     } else if (c.stat.getEphemeralOwner() == request.sessionId) {
                         es.add(c.path);
                     }
@@ -584,13 +590,13 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
                     nodeRecord = new ChangeRecord(
                             request.getHdr().getZxid(), path2Delete, null, 0, null);
                     nodeRecord.precalculatedDigest = precalculateDigest(
-                            DigestOpCode.REMOVE, path2Delete);
-                    addChangeRecord(nodeRecord);
+                            DigestOpCode.REMOVE, path2Delete); // REMOVE 事件
+                    addChangeRecord(nodeRecord); // 加入队列, 异步移除
                 }
                 if (ZooKeeperServer.isCloseSessionTxnEnabled()) {
                     request.setTxn(new CloseSessionTxn(new ArrayList<String>(es)));
                 }
-                zks.sessionTracker.setSessionClosing(request.sessionId);
+                zks.sessionTracker.setSessionClosing(request.sessionId); // 设置 Session 状态为 CLOSING
             }
             ServerMetrics.getMetrics().CLOSE_SESSION_PREP_TIME.add(Time.currentElapsedTime() - startTime);
             break;
@@ -645,7 +651,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
             data = createRequest.getData();
             ttl = -1;
         }
-        CreateMode createMode = CreateMode.fromFlag(flags);
+        CreateMode createMode = CreateMode.fromFlag(flags); // 节点类型 CreateMode
         validateCreateRequest(path, createMode, request, ttl);
         String parentPath = validatePathForCreate(path, request.sessionId);
 
@@ -654,8 +660,9 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
 
         zks.checkACL(request.cnxn, parentRecord.acl, ZooDefs.Perms.CREATE, request.authInfo, path, listACL);
         int parentCVersion = parentRecord.stat.getCversion();
+        // 如果是顺序节点
         if (createMode.isSequential()) {
-            path = path + String.format(Locale.ENGLISH, "%010d", parentCVersion);
+            path = path + String.format(Locale.ENGLISH, "%010d", parentCVersion); // 拼好序号
         }
         validatePath(path, request.sessionId);
         try {
@@ -765,6 +772,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
             case OpCode.createContainer:
             case OpCode.create:
             case OpCode.create2:
+                // 增
                 CreateRequest create2Request = new CreateRequest();
                 pRequest2Txn(request.type, zks.getNextZxid(), request, create2Request, true);
                 break;
@@ -774,10 +782,12 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
                 break;
             case OpCode.deleteContainer:
             case OpCode.delete:
+                // 删
                 DeleteRequest deleteRequest = new DeleteRequest();
                 pRequest2Txn(request.type, zks.getNextZxid(), request, deleteRequest, true);
                 break;
             case OpCode.setData:
+                // 改
                 SetDataRequest setDataRequest = new SetDataRequest();
                 pRequest2Txn(request.type, zks.getNextZxid(), request, setDataRequest, true);
                 break;
@@ -871,6 +881,7 @@ public class PrepRequestProcessor extends ZooKeeperCriticalThread implements Req
             //create/close session don't require request record
             case OpCode.createSession:
             case OpCode.closeSession:
+                // 关闭连接
                 if (!request.isLocalSession()) {
                     pRequest2Txn(request.type, zks.getNextZxid(), request, null, true);
                 }
