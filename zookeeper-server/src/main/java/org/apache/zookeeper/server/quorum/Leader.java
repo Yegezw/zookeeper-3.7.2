@@ -685,7 +685,7 @@ public class Leader extends LearnerMaster {
                 return;
             }
 
-            startZkServer();
+            startZkServer(); // 启动
 
             /**
              * WARNING: do not use this for anything other than QA testing
@@ -1518,7 +1518,7 @@ public class Leader extends LearnerMaster {
         }
 
         leaderStartTime = Time.currentElapsedTime();
-        zk.startup();
+        zk.startup(); // 启动
         /*
          * Update the election vote here to ensure that all members of the
          * ensemble report the same vote to new servers that start up and

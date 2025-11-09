@@ -18,10 +18,6 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import java.nio.ByteBuffer;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.jute.Record;
 import org.apache.zookeeper.common.Time;
 import org.apache.zookeeper.server.ObserverBean;
@@ -36,6 +32,12 @@ import org.apache.zookeeper.txn.TxnDigest;
 import org.apache.zookeeper.txn.TxnHeader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * Observers are peers that do not take part in the atomic broadcast protocol.
@@ -125,8 +127,8 @@ public class Observer extends Learner {
                 ServerMetrics.getMetrics().OBSERVER_SYNC_TIME.add(syncTime);
                 QuorumPacket qp = new QuorumPacket();
                 while (this.isRunning() && nextLearnerMaster.get() == null) {
-                    readPacket(qp);
-                    processPacket(qp);
+                    readPacket(qp);    // 读数据
+                    processPacket(qp); // 处理数据
                 }
             } catch (Exception e) {
                 LOG.warn("Exception when observing the leader", e);

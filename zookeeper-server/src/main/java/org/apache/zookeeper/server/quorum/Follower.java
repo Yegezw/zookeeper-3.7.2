@@ -18,12 +18,6 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Objects;
 import org.apache.jute.Record;
 import org.apache.zookeeper.ZooDefs.OpCode;
 import org.apache.zookeeper.common.Time;
@@ -37,6 +31,14 @@ import org.apache.zookeeper.server.util.ZxidUtils;
 import org.apache.zookeeper.txn.SetDataTxn;
 import org.apache.zookeeper.txn.TxnDigest;
 import org.apache.zookeeper.txn.TxnHeader;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Objects;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * This class has the control logic for the Follower.
@@ -121,8 +123,8 @@ public class Follower extends Learner {
                 // create a reusable packet to reduce gc impact
                 QuorumPacket qp = new QuorumPacket();
                 while (this.isRunning()) {
-                    readPacket(qp);
-                    processPacket(qp);
+                    readPacket(qp);    // 读数据
+                    processPacket(qp); // 处理数据
                 }
             } catch (Exception e) {
                 LOG.warn("Exception when following the leader", e);
