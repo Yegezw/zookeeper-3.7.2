@@ -239,7 +239,7 @@ public class Follower extends Learner {
                 revalidate(qp);
             }
             break;
-        case Leader.SYNC:
+        case Leader.SYNC: // Leader 发来的 sync 请求
             fzk.sync();
             break;
         default:

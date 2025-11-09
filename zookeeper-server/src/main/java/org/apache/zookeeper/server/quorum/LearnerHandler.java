@@ -690,12 +690,12 @@ public class LearnerHandler extends ZooKeeperThread {
                     bb = bb.slice();
                     Request si;
                     if (type == OpCode.sync) {
-                        si = new LearnerSyncRequest(this, sessionId, cxid, type, bb, qp.getAuthinfo());
+                        si = new LearnerSyncRequest(this, sessionId, cxid, type, bb, qp.getAuthinfo()); // 同步请求
                     } else {
                         si = new Request(null, sessionId, cxid, type, bb, qp.getAuthinfo());
                     }
                     si.setOwner(this);
-                    learnerMaster.submitLearnerRequest(si);
+                    learnerMaster.submitLearnerRequest(si); // 同步请求会在 ProposalRequestProcessor 中得到处理
                     requestsReceived.incrementAndGet();
                     break;
                 default:

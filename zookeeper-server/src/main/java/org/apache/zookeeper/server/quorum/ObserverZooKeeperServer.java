@@ -126,7 +126,7 @@ public class ObserverZooKeeperServer extends LearnerZooKeeperServer {
         }
 
         Request r = pendingSyncs.remove();
-        commitProcessor.commit(r);
+        commitProcessor.commit(r); // 写到内存
     }
 
     @Override

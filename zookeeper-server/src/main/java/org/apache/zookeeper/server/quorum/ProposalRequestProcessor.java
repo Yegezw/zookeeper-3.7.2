@@ -75,7 +75,7 @@ public class ProposalRequestProcessor implements RequestProcessor {
          * 如果是 Follower / Observer 则走 if 分支, Leader 走 else
          */
         if (request instanceof LearnerSyncRequest) {
-            zks.getLeader().processSync((LearnerSyncRequest) request);
+            zks.getLeader().processSync((LearnerSyncRequest) request); // 同步请求
         } else {
             // 默认是 true
             if (shouldForwardToNextProcessor(request)) {

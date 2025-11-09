@@ -925,6 +925,7 @@ public class Leader extends LearnerMaster {
         }
         // 调用 CommitProcessor 的 commit 方法
         zk.commitProcessor.commit(p.request);
+        // 遍历该 zxid 对应的所有缓存 Sync 请求, 逐一回复
         if (pendingSyncs.containsKey(zxid)) {
             for (LearnerSyncRequest r : pendingSyncs.remove(zxid)) {
                 sendSync(r);
@@ -1237,8 +1238,9 @@ public class Leader extends LearnerMaster {
 
     public synchronized void processSync(LearnerSyncRequest r) {
         if (outstandingProposals.isEmpty()) {
-            sendSync(r);
+            sendSync(r); // 没有未完成的提案 -> 同步
         } else {
+            // 存在未完成的提案 -> 加入待同步队列, 等待最新提案提交后再回复 (位于 tryToCommit 中)
             pendingSyncs.computeIfAbsent(lastProposed, k -> new ArrayList<>()).add(r);
         }
     }

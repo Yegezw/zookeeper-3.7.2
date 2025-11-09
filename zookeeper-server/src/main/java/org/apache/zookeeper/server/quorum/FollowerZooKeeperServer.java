@@ -131,7 +131,7 @@ public class FollowerZooKeeperServer extends LearnerZooKeeperServer {
             LearnerSyncRequest lsr = (LearnerSyncRequest) r;
             lsr.fh.queuePacket(new QuorumPacket(Leader.SYNC, 0, null, null));
         }
-        commitProcessor.commit(r);
+        commitProcessor.commit(r); // 写到内存
     }
 
     @Override

@@ -198,7 +198,7 @@ public class Observer extends Learner {
         case Leader.REVALIDATE:
             revalidate(qp);
             break;
-        case Leader.SYNC:
+        case Leader.SYNC: // Leader 发来的 sync 请求
             ((ObserverZooKeeperServer) zk).sync();
             break;
         case Leader.INFORM: // Leader 发来的 inform 请求
