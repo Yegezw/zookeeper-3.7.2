@@ -536,7 +536,7 @@ public class DataTree {
         if (node == null) {
             throw new KeeperException.NoNodeException();
         }
-        nodes.remove(path);
+        nodes.remove(path); // 删除数据
         synchronized (node) {
             aclCache.removeUsage(node.acl);
             nodeDataSize.addAndGet(-getNodeSize(path, node.data));
@@ -599,11 +599,12 @@ public class DataTree {
 
     public Stat setData(String path, byte[] data, int version, long zxid, long time) throws KeeperException.NoNodeException {
         Stat s = new Stat();
-        DataNode n = nodes.get(path);
+        DataNode n = nodes.get(path); // 先取出旧数据
         if (n == null) {
             throw new KeeperException.NoNodeException();
         }
         byte[] lastdata = null;
+        // 更新数据
         synchronized (n) {
             lastdata = n.data;
             nodes.preChange(path, n);
@@ -896,12 +897,14 @@ public class DataTree {
                 break;
             case OpCode.delete:
             case OpCode.deleteContainer:
+                // 删除数据
                 DeleteTxn deleteTxn = (DeleteTxn) txn;
                 rc.path = deleteTxn.getPath();
                 deleteNode(deleteTxn.getPath(), header.getZxid());
                 break;
             case OpCode.reconfig:
             case OpCode.setData:
+                // 更新数据
                 SetDataTxn setDataTxn = (SetDataTxn) txn;
                 rc.path = setDataTxn.getPath();
                 rc.stat = setData(
