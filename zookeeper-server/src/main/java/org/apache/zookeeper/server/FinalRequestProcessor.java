@@ -242,6 +242,7 @@ public class FinalRequestProcessor implements RequestProcessor {
                             subResult = new GetChildrenResult(((GetChildrenResponse) rec).getChildren());
                             break;
                         case OpCode.getData:
+                            // 查询数据
                             rec = handleGetDataRequest(readOp.toRequestRecord(), cnxn, request.authInfo);
                             GetDataResponse gdr = (GetDataResponse) rec;
                             subResult = new GetDataResult(gdr.getData(), gdr.getStat());
@@ -623,7 +624,7 @@ public class FinalRequestProcessor implements RequestProcessor {
         }
         zks.checkACL(cnxn, zks.getZKDatabase().aclForNode(n), ZooDefs.Perms.READ, authInfo, path, null);
         Stat stat = new Stat();
-        byte[] b = zks.getZKDatabase().getData(path, stat, getDataRequest.getWatch() ? cnxn : null);
+        byte[] b = zks.getZKDatabase().getData(path, stat, getDataRequest.getWatch() ? cnxn : null); // 查询数据
         return new GetDataResponse(b, stat);
     }
 
