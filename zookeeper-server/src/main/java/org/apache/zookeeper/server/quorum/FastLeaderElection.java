@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+// 负责 zookeeper 集群 Leader 的选举, 核心方法 lookForLeader()
 /**
  * Implementation of leader election using TCP. It uses an object of the class
  * QuorumCnxManager to manage connections. Otherwise, the algorithm is push-based
@@ -226,8 +227,8 @@ public class FastLeaderElection implements Election {
 
     }
 
-    LinkedBlockingQueue<ToSend> sendqueue;
-    LinkedBlockingQueue<Notification> recvqueue;
+    LinkedBlockingQueue<ToSend> sendqueue;       // 发送队列, WorkerSender 会把它扔到 QuorumCnxManager.queueSendMap
+    LinkedBlockingQueue<Notification> recvqueue; // 接收队列, WorkerReceiver 会从 QuorumCnxManager.recvQueue 拿出数据放到这里
 
     /**
      * Multi-threaded implementation of message handler. Messenger
@@ -260,7 +261,7 @@ public class FastLeaderElection implements Election {
                 while (!stop) {
                     // Sleeps on receive
                     try {
-                        response = manager.pollRecvQueue(3000, TimeUnit.MILLISECONDS);
+                        response = manager.pollRecvQueue(3000, TimeUnit.MILLISECONDS); // 拿出数据
                         if (response == null) {
                             continue;
                         }
@@ -431,7 +432,7 @@ public class FastLeaderElection implements Election {
                              */
 
                             if (self.getPeerState() == QuorumPeer.ServerState.LOOKING) {
-                                recvqueue.offer(n);
+                                recvqueue.offer(n); // 加入队列
 
                                 /*
                                  * Send a notification back if the peer that sent this
@@ -519,12 +520,12 @@ public class FastLeaderElection implements Election {
             public void run() {
                 while (!stop) {
                     try {
-                        ToSend m = sendqueue.poll(3000, TimeUnit.MILLISECONDS);
+                        ToSend m = sendqueue.poll(3000, TimeUnit.MILLISECONDS); // 拿出数据
                         if (m == null) {
                             continue;
                         }
 
-                        process(m);
+                        process(m); // 处理数据
                     } catch (InterruptedException e) {
                         break;
                     }
@@ -541,9 +542,7 @@ public class FastLeaderElection implements Election {
                 ByteBuffer requestBuffer = buildMsg(m.state.ordinal(), m.leader, m.zxid, m.electionEpoch, m.peerEpoch, m.configData);
 
                 manager.toSend(m.sid, requestBuffer);
-
             }
-
         }
 
         WorkerSender ws;
@@ -746,7 +745,7 @@ public class FastLeaderElection implements Election {
                 self.getMyId(),
                 Long.toHexString(proposedEpoch));
 
-            sendqueue.offer(notmsg);
+            sendqueue.offer(notmsg); // 加入队列
         }
     }
 

@@ -18,49 +18,6 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.apache.zookeeper.common.NetUtils.formatInetAddr;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.Closeable;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.SocketException;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
-import java.nio.BufferUnderflowException;
-import java.nio.ByteBuffer;
-import java.nio.channels.UnresolvedAddressException;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Enumeration;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import javax.net.ssl.SSLSocket;
 import org.apache.zookeeper.common.NetUtils;
 import org.apache.zookeeper.common.X509Exception;
 import org.apache.zookeeper.server.ExitCode;
@@ -75,7 +32,25 @@ import org.apache.zookeeper.util.ServiceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLSocket;
+import java.io.*;
+import java.net.*;
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
+import java.nio.channels.UnresolvedAddressException;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.zookeeper.common.NetUtils.formatInetAddr;
+
+// Quorum Connection Manager 负责 zookeeper 集群内部节点之间的通信, 核心方法 connectOne() 连接到目标 sid
 /**
  * This class implements a connection manager for leader election using TCP. It
  * maintains one connection for every pair of servers. The tricky part is to
@@ -157,14 +132,14 @@ public class QuorumCnxManager {
     /*
      * Mapping from Peer to Thread number
      */
-    final ConcurrentHashMap<Long, SendWorker> senderWorkerMap;
-    final ConcurrentHashMap<Long, BlockingQueue<ByteBuffer>> queueSendMap;
+    final ConcurrentHashMap<Long, SendWorker> senderWorkerMap;             // key = sid, 发送者 Worker
+    final ConcurrentHashMap<Long, BlockingQueue<ByteBuffer>> queueSendMap; // key = sid, 发送队列
     final ConcurrentHashMap<Long, ByteBuffer> lastMessageSent;
 
     /*
      * Reception queue
      */
-    public final BlockingQueue<Message> recvQueue;
+    public final BlockingQueue<Message> recvQueue; // 接收队列
 
     /*
      * Shutdown flag
@@ -374,6 +349,7 @@ public class QuorumCnxManager {
     public void initiateConnection(final MultipleAddresses electionAddr, final Long sid) {
         Socket sock = null;
         try {
+            // 1. 搞一个 socket
             LOG.debug("Opening channel to server {}", sid);
             if (self.isSslQuorum()) {
                 sock = self.getX509Util().createSSLSocket();
@@ -381,6 +357,7 @@ public class QuorumCnxManager {
                 sock = SOCKET_FACTORY.get();
             }
             setSockOpts(sock);
+            // 2. connect address
             sock.connect(electionAddr.getReachableOrOne(), cnxTO);
             if (sock instanceof SSLSocket) {
                 SSLSocket sslSock = (SSLSocket) sock;
@@ -404,6 +381,7 @@ public class QuorumCnxManager {
         }
 
         try {
+            // 3. 启动: 发送线程 + 接收线程
             startConnection(sock, sid);
         } catch (IOException e) {
             LOG.error(
@@ -427,7 +405,7 @@ public class QuorumCnxManager {
             return true;
         }
         try {
-            connectionExecutor.execute(new QuorumConnectionReqThread(electionAddr, sid));
+            connectionExecutor.execute(new QuorumConnectionReqThread(electionAddr, sid)); // 连接 + 启动 socket 读写线程
             connectionThreadCnt.incrementAndGet();
         } catch (Throwable e) {
             // Imp: Safer side catching all type of exceptions and remove 'sid'
@@ -444,8 +422,8 @@ public class QuorumCnxManager {
      * Thread to send connection request to peer server.
      */
     private class QuorumConnectionReqThread extends ZooKeeperThread {
-        final MultipleAddresses electionAddr;
-        final Long sid;
+        final MultipleAddresses electionAddr; // 目标地址
+        final Long sid;                       // 目标 sid
         QuorumConnectionReqThread(final MultipleAddresses electionAddr, final Long sid) {
             super("QuorumConnectionReqThread-" + sid);
             this.electionAddr = electionAddr;
@@ -510,12 +488,14 @@ public class QuorumCnxManager {
         }
 
         // If lost the challenge, then drop the new connection
+        // 只能大连小, 不能小连大: 只能和比自己 sid 小的节点进行连接, 如果目标 sid > self_sid 就关闭连接
         if (sid > self.getMyId()) {
             LOG.info("Have smaller server identifier, so dropping the connection: (myId:{} --> sid:{})", self.getMyId(), sid);
             closeSocket(sock);
             // Otherwise proceed with the connection
         } else {
             LOG.debug("Have larger server identifier, so keeping the connection: (myId:{} --> sid:{})", self.getMyId(), sid);
+            // 启动: 发送线程 + 接收线程
             SendWorker sw = new SendWorker(sock, sid);
             RecvWorker rw = new RecvWorker(sock, din, sid, sw);
             sw.setRecv(rw);
@@ -692,7 +672,7 @@ public class QuorumCnxManager {
          */
         if (this.mySid == sid) {
             b.position(0);
-            addToRecvQueue(new Message(b.duplicate(), sid));
+            addToRecvQueue(new Message(b.duplicate(), sid)); // 给自己发消息, 直接扔到接收队列
             /*
              * Otherwise send to the corresponding thread to send.
              */
@@ -701,7 +681,7 @@ public class QuorumCnxManager {
              * Start a new connection if doesn't have one already.
              */
             BlockingQueue<ByteBuffer> bq = queueSendMap.computeIfAbsent(sid, serverId -> new CircularBlockingQueue<>(SEND_CAPACITY));
-            addToSendQueue(bq, b);
+            addToSendQueue(bq, b); // 扔到发送队列
             connectOne(sid);
         }
     }
@@ -730,7 +710,7 @@ public class QuorumCnxManager {
         // we are doing connection initiation always asynchronously, since it is possible that
         // the socket connection timeouts or the SSL handshake takes too long and don't want
         // to keep the rest of the connections to wait
-        return initiateConnectionAsync(electionAddr, sid);
+        return initiateConnectionAsync(electionAddr, sid); // 连接
     }
 
     /**
@@ -1175,7 +1155,7 @@ public class QuorumCnxManager {
             this.sock = sock;
             recvWorker = null;
             try {
-                dout = new DataOutputStream(sock.getOutputStream());
+                dout = new DataOutputStream(sock.getOutputStream()); // socket 输出流
             } catch (IOException e) {
                 LOG.error("Unable to access socket output stream", e);
                 closeSocket(sock);
@@ -1258,7 +1238,7 @@ public class QuorumCnxManager {
                     ByteBuffer b = lastMessageSent.get(sid);
                     if (b != null) {
                         LOG.debug("Attempting to send lastMessage to sid={}", sid);
-                        send(b);
+                        send(b); // 发送
                     }
                 }
             } catch (IOException e) {
@@ -1272,7 +1252,7 @@ public class QuorumCnxManager {
 
                     ByteBuffer b = null;
                     try {
-                        BlockingQueue<ByteBuffer> bq = queueSendMap.get(sid);
+                        BlockingQueue<ByteBuffer> bq = queueSendMap.get(sid); // 拿到本线程负责的 sid 的发送队列
                         if (bq != null) {
                             b = pollSendQueue(bq, 1000, TimeUnit.MILLISECONDS);
                         } else {
@@ -1282,7 +1262,7 @@ public class QuorumCnxManager {
 
                         if (b != null) {
                             lastMessageSent.put(sid, b);
-                            send(b);
+                            send(b); // 发送
                         }
                     } catch (InterruptedException e) {
                         LOG.warn("Interrupted while waiting for message on queue", e);
@@ -1346,7 +1326,7 @@ public class QuorumCnxManager {
             this.sid = sid;
             this.sock = sock;
             this.sw = sw;
-            this.din = din;
+            this.din = din; // socket 输入流
             try {
                 // OK to wait until socket disconnects while reading.
                 sock.setSoTimeout(0);
@@ -1395,8 +1375,8 @@ public class QuorumCnxManager {
                      * Allocates a new ByteBuffer to receive the message
                      */
                     final byte[] msgArray = new byte[length];
-                    din.readFully(msgArray, 0, length);
-                    addToRecvQueue(new Message(ByteBuffer.wrap(msgArray), sid));
+                    din.readFully(msgArray, 0, length); // 读消息
+                    addToRecvQueue(new Message(ByteBuffer.wrap(msgArray), sid)); // 放到 recvQueue
                 }
             } catch (Exception e) {
                 LOG.warn(
