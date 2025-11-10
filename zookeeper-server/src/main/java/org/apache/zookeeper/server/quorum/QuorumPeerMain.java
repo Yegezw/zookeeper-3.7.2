@@ -18,21 +18,13 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import java.io.IOException;
-import javax.management.JMException;
-import javax.security.sasl.SaslException;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.zookeeper.audit.ZKAuditProvider;
 import org.apache.zookeeper.jmx.ManagedUtil;
 import org.apache.zookeeper.metrics.MetricsProvider;
 import org.apache.zookeeper.metrics.MetricsProviderLifeCycleException;
 import org.apache.zookeeper.metrics.impl.MetricsProviderBootstrap;
-import org.apache.zookeeper.server.DatadirCleanupManager;
-import org.apache.zookeeper.server.ExitCode;
-import org.apache.zookeeper.server.ServerCnxnFactory;
-import org.apache.zookeeper.server.ServerMetrics;
-import org.apache.zookeeper.server.ZKDatabase;
-import org.apache.zookeeper.server.ZooKeeperServerMain;
+import org.apache.zookeeper.server.*;
 import org.apache.zookeeper.server.admin.AdminServer.AdminServerException;
 import org.apache.zookeeper.server.auth.ProviderRegistry;
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
@@ -43,6 +35,11 @@ import org.apache.zookeeper.util.ServiceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.management.JMException;
+import javax.security.sasl.SaslException;
+import java.io.IOException;
+
+// 启动类: 集群模式
 /**
  *
  * <h2>Configuration file</h2>
