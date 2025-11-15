@@ -248,7 +248,7 @@ public class FileTxnSnapLog {
      */
     public long restore(DataTree dt, Map<Long, Integer> sessions, PlayBackListener listener) throws IOException {
         long snapLoadingStartTime = Time.currentElapsedTime();
-        long deserializeResult = snapLog.deserialize(dt, sessions);
+        long deserializeResult = snapLog.deserialize(dt, sessions); // 数据恢复
         ServerMetrics.getMetrics().STARTUP_SNAP_LOAD_TIME.add(Time.currentElapsedTime() - snapLoadingStartTime);
         FileTxnLog txnLog = new FileTxnLog(dataDir);
         boolean trustEmptyDB;
@@ -261,7 +261,7 @@ public class FileTxnSnapLog {
         }
 
         RestoreFinalizer finalizer = () -> {
-            long highestZxid = fastForwardFromEdits(dt, sessions, listener);
+            long highestZxid = fastForwardFromEdits(dt, sessions, listener); // 从事务日志中恢复数据
             // The snapshotZxidDigest will reset after replaying the txn of the
             // zxid in the snapshotZxidDigest, if it's not reset to null after
             // restoring, it means either there are not enough txns to cover that
@@ -324,7 +324,8 @@ public class FileTxnSnapLog {
         DataTree dt,
         Map<Long, Integer> sessions,
         PlayBackListener listener) throws IOException {
-        TxnIterator itr = txnLog.read(dt.lastProcessedZxid + 1);
+        // 找到需要恢复的事务日志
+        TxnIterator itr = txnLog.read(dt.lastProcessedZxid + 1); // 核心
         long highestZxid = dt.lastProcessedZxid;
         TxnHeader hdr;
         int txnLoaded = 0;
@@ -344,7 +345,7 @@ public class FileTxnSnapLog {
                     highestZxid = hdr.getZxid();
                 }
                 try {
-                    processTransaction(hdr, dt, sessions, itr.getTxn());
+                    processTransaction(hdr, dt, sessions, itr.getTxn()); // 进行数据恢复
                     dt.compareDigest(hdr, itr.getTxn(), itr.getDigest());
                     txnLoaded++;
                 } catch (KeeperException.NoNodeException e) {

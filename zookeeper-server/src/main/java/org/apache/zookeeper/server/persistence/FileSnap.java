@@ -74,7 +74,7 @@ public class FileSnap implements SnapShot {
         // we run through 100 snapshots (not all of them)
         // if we cannot get it running within 100 snapshots
         // we should  give up
-        List<File> snapList = findNValidSnapshots(100);
+        List<File> snapList = findNValidSnapshots(100); // 找到最新 100 个数据快照日志文件
         if (snapList.size() == 0) {
             return -1L;
         }
@@ -82,12 +82,15 @@ public class FileSnap implements SnapShot {
         long snapZxid = -1;
         boolean foundValid = false;
         for (int i = 0, snapListSize = snapList.size(); i < snapListSize; i++) {
-            snap = snapList.get(i);
+            snap = snapList.get(i); // 获取到一个快照文件
             LOG.info("Reading snapshot {}", snap);
             snapZxid = Util.getZxidFromName(snap.getName(), SNAPSHOT_FILE_PREFIX);
+            // 转成流
             try (CheckedInputStream snapIS = SnapStream.getInputStream(snap)) {
                 InputArchive ia = BinaryInputArchive.getArchive(snapIS);
+                // 反序列化到内存
                 deserialize(dt, sessions, ia);
+                // 校验 CheckSum, 也就是文件校验和, 不符合的话会抛出异常
                 SnapStream.checkSealIntegrity(snapIS, ia);
 
                 // Digest feature was added after the CRC to make it backward
@@ -100,6 +103,8 @@ public class FileSnap implements SnapShot {
                     SnapStream.checkSealIntegrity(snapIS, ia);
                 }
 
+                // 反序列化到内存成功后就 break
+                // 假设第一个快照文件就反序列化成功了, 那后面 99 个就不再执行了
                 foundValid = true;
                 break;
             } catch (IOException e) {
@@ -161,6 +166,7 @@ public class FileSnap implements SnapShot {
      * @throws IOException
      */
     protected List<File> findNValidSnapshots(int n) throws IOException {
+        // 找到 snapDir 下面的子文件, 也就是所有的数据快照文件, 然后排序, 排序规则是按照 zxid 倒序 (新 -> 旧)
         List<File> files = Util.sortDataDir(snapDir.listFiles(), SNAPSHOT_FILE_PREFIX, false);
         int count = 0;
         List<File> list = new ArrayList<File>();
@@ -169,11 +175,12 @@ public class FileSnap implements SnapShot {
             // from the valid snapshot and continue
             // until we find a valid one
             try {
+                // 进行验证
                 if (SnapStream.isValidSnapshot(f)) {
                     list.add(f);
                     count++;
                     if (count == n) {
-                        break;
+                        break; // 找到 100 个
                     }
                 }
             } catch (IOException e) {
