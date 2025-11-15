@@ -18,21 +18,18 @@
 
 package org.apache.zookeeper.server;
 
-import java.io.File;
-import java.io.FileFilter;
-import java.io.IOException;
-import java.text.DateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
 import org.apache.zookeeper.server.persistence.Util;
 import org.apache.zookeeper.util.ServiceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.FileFilter;
+import java.io.IOException;
+import java.text.DateFormat;
+import java.util.*;
 
 /**
  * this class is used to clean up the
@@ -73,13 +70,14 @@ public class PurgeTxnLog {
      * @throws IOException
      */
     public static void purge(File dataDir, File snapDir, int num) throws IOException {
+        // 数据快照至少保留 3 份
         if (num < 3) {
             throw new IllegalArgumentException(COUNT_ERR_MSG);
         }
 
         FileTxnSnapLog txnLog = new FileTxnSnapLog(dataDir, snapDir);
 
-        List<File> snaps = txnLog.findNValidSnapshots(num);
+        List<File> snaps = txnLog.findNValidSnapshots(num); // 保留最新的 num 个快照
         int numSnaps = snaps.size();
         if (numSnaps > 0) {
             purgeOlderSnapshots(txnLog, snaps.get(numSnaps - 1));
@@ -147,7 +145,7 @@ public class PurgeTxnLog {
             files.addAll(Arrays.asList(snapshots));
         }
 
-        // remove the old files
+        // remove the old files 删除旧文件
         for (File f : files) {
             final String msg = String.format(
                 "Removing file: %s\t%s",

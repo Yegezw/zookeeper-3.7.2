@@ -138,13 +138,16 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
     }
 
     private boolean shouldSnapshot() {
+        // 当前已经记录的事务日志数量
         int logCount = zks.getZKDatabase().getTxnCount();
         long logSize = zks.getZKDatabase().getTxnSize();
+        // randRoll 是 [0 ... snapCount / 2) 之前的随机数
         return (logCount > (snapCount / 2 + randRoll))
                || (snapSizeInBytes > 0 && logSize > (snapSizeInBytes / 2 + randSize));
     }
 
     private void resetSnapshotStats() {
+        // randRoll 是 [0 ... snapCount / 2) 之前的随机数
         randRoll = ThreadLocalRandom.current().nextInt(snapCount / 2);
         randSize = Math.abs(ThreadLocalRandom.current().nextLong() % (snapSizeInBytes / 2));
     }
@@ -176,10 +179,10 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements Req
 
                 // track the number of records written to the log 将数据追加到事务日志
                 if (!si.isThrottled() && zks.getZKDatabase().append(si)) {
-                    // 是否需要写快照文件
+                    // 是否需要写快照文件 (是否达到 snapCount 参数阈值)
                     if (shouldSnapshot()) {
                         resetSnapshotStats();
-                        // roll the log 写入新的事务日志文件
+                        // roll the log 将现有的事务日志强制刷盘, 且重置 "生成新的事务日志文件" 的条件
                         zks.getZKDatabase().rollLog();
                         // take a snapshot
                         if (!snapThreadMutex.tryAcquire()) {

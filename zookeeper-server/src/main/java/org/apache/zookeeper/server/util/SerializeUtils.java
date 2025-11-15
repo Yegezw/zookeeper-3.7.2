@@ -18,38 +18,23 @@
 
 package org.apache.zookeeper.server.util;
 
+import org.apache.jute.BinaryInputArchive;
+import org.apache.jute.InputArchive;
+import org.apache.jute.OutputArchive;
+import org.apache.jute.Record;
+import org.apache.zookeeper.ZooDefs.OpCode;
+import org.apache.zookeeper.server.*;
+import org.apache.zookeeper.server.persistence.Util;
+import org.apache.zookeeper.txn.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import org.apache.jute.BinaryInputArchive;
-import org.apache.jute.InputArchive;
-import org.apache.jute.OutputArchive;
-import org.apache.jute.Record;
-import org.apache.zookeeper.ZooDefs.OpCode;
-import org.apache.zookeeper.server.DataTree;
-import org.apache.zookeeper.server.Request;
-import org.apache.zookeeper.server.TxnLogEntry;
-import org.apache.zookeeper.server.ZooKeeperServer;
-import org.apache.zookeeper.server.ZooTrace;
-import org.apache.zookeeper.server.persistence.Util;
-import org.apache.zookeeper.txn.CloseSessionTxn;
-import org.apache.zookeeper.txn.CreateContainerTxn;
-import org.apache.zookeeper.txn.CreateSessionTxn;
-import org.apache.zookeeper.txn.CreateTTLTxn;
-import org.apache.zookeeper.txn.CreateTxn;
-import org.apache.zookeeper.txn.CreateTxnV0;
-import org.apache.zookeeper.txn.DeleteTxn;
-import org.apache.zookeeper.txn.ErrorTxn;
-import org.apache.zookeeper.txn.MultiTxn;
-import org.apache.zookeeper.txn.SetACLTxn;
-import org.apache.zookeeper.txn.SetDataTxn;
-import org.apache.zookeeper.txn.TxnDigest;
-import org.apache.zookeeper.txn.TxnHeader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class SerializeUtils {
 
@@ -168,7 +153,7 @@ public class SerializeUtils {
             oa.writeLong(entry.getKey().longValue(), "id");
             oa.writeInt(entry.getValue().intValue(), "timeout");
         }
-        dt.serialize(oa, "tree");
+        dt.serialize(oa, "tree"); // 写入数据
     }
 
     public static byte[] serializeRequest(Request request) {

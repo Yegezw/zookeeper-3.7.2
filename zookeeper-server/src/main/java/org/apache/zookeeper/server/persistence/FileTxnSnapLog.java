@@ -18,6 +18,20 @@
 
 package org.apache.zookeeper.server.persistence;
 
+import org.apache.jute.Record;
+import org.apache.zookeeper.KeeperException;
+import org.apache.zookeeper.KeeperException.Code;
+import org.apache.zookeeper.ZooDefs.OpCode;
+import org.apache.zookeeper.common.Time;
+import org.apache.zookeeper.server.*;
+import org.apache.zookeeper.server.DataTree.ProcessTxnResult;
+import org.apache.zookeeper.server.persistence.TxnLog.TxnIterator;
+import org.apache.zookeeper.txn.CreateSessionTxn;
+import org.apache.zookeeper.txn.TxnDigest;
+import org.apache.zookeeper.txn.TxnHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
@@ -25,23 +39,6 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import org.apache.jute.Record;
-import org.apache.zookeeper.KeeperException;
-import org.apache.zookeeper.KeeperException.Code;
-import org.apache.zookeeper.ZooDefs.OpCode;
-import org.apache.zookeeper.common.Time;
-import org.apache.zookeeper.server.DataTree;
-import org.apache.zookeeper.server.DataTree.ProcessTxnResult;
-import org.apache.zookeeper.server.Request;
-import org.apache.zookeeper.server.ServerMetrics;
-import org.apache.zookeeper.server.ServerStats;
-import org.apache.zookeeper.server.ZooTrace;
-import org.apache.zookeeper.server.persistence.TxnLog.TxnIterator;
-import org.apache.zookeeper.txn.CreateSessionTxn;
-import org.apache.zookeeper.txn.TxnDigest;
-import org.apache.zookeeper.txn.TxnHeader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * This is a helper class
@@ -474,11 +471,13 @@ public class FileTxnSnapLog {
         DataTree dataTree,
         ConcurrentHashMap<Long, Integer> sessionsWithTimeouts,
         boolean syncSnap) throws IOException {
+        // 获取最后一个 zxid
         long lastZxid = dataTree.lastProcessedZxid;
+        // 生成快照日志文件
         File snapshotFile = new File(snapDir, Util.makeSnapshotName(lastZxid));
         LOG.info("Snapshotting: 0x{} to {}", Long.toHexString(lastZxid), snapshotFile);
         try {
-            snapLog.serialize(dataTree, sessionsWithTimeouts, snapshotFile, syncSnap);
+            snapLog.serialize(dataTree, sessionsWithTimeouts, snapshotFile, syncSnap); // 写数据
         } catch (IOException e) {
             if (snapshotFile.length() == 0) {
                 /* This may be caused by a full disk. In such a case, the server

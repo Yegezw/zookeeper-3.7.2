@@ -221,9 +221,9 @@ public class FileTxnLog implements TxnLog, Closeable {
      */
     public synchronized void rollLog() throws IOException {
         if (logStream != null) {
-            this.logStream.flush();
+            this.logStream.flush(); // 将现有的事务日志强制刷盘
             prevLogsRunningTotal += getCurrentLogSize();
-            this.logStream = null;
+            this.logStream = null;  // 置 null, 写事务日志的时候会判断 logStream 是不是null, 是 null 则产生新文件
             oa = null;
 
             // Roll over the current log file into the running total

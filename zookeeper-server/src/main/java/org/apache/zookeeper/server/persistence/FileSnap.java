@@ -18,14 +18,6 @@
 
 package org.apache.zookeeper.server.persistence;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.zip.CheckedInputStream;
-import java.util.zip.CheckedOutputStream;
 import org.apache.jute.BinaryInputArchive;
 import org.apache.jute.BinaryOutputArchive;
 import org.apache.jute.InputArchive;
@@ -34,6 +26,15 @@ import org.apache.zookeeper.server.DataTree;
 import org.apache.zookeeper.server.util.SerializeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.zip.CheckedInputStream;
+import java.util.zip.CheckedOutputStream;
 
 /**
  * This class implements the snapshot interface.
@@ -223,8 +224,8 @@ public class FileSnap implements SnapShot {
         if (header == null) {
             throw new IllegalStateException("Snapshot's not open for writing: uninitialized header");
         }
-        header.serialize(oa, "fileheader");
-        SerializeUtils.serializeSnapshot(dt, oa, sessions);
+        header.serialize(oa, "fileheader"); // 写入文件头
+        SerializeUtils.serializeSnapshot(dt, oa, sessions); // 写入数据、session
     }
 
     /**
@@ -242,8 +243,8 @@ public class FileSnap implements SnapShot {
         if (!close) {
             try (CheckedOutputStream snapOS = SnapStream.getOutputStream(snapShot, fsync)) {
                 OutputArchive oa = BinaryOutputArchive.getArchive(snapOS);
-                FileHeader header = new FileHeader(SNAP_MAGIC, VERSION, dbId);
-                serialize(dt, sessions, oa, header);
+                FileHeader header = new FileHeader(SNAP_MAGIC, VERSION, dbId); // 文件头
+                serialize(dt, sessions, oa, header); // 写入文件: 数据、session、文件头
                 SnapStream.sealStream(snapOS, oa);
 
                 // Digest feature was added after the CRC to make it backward

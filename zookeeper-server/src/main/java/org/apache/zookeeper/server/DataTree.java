@@ -1326,8 +1326,8 @@ public class DataTree {
     }
 
     public void serialize(OutputArchive oa, String tag) throws IOException {
-        serializeAcls(oa);
-        serializeNodes(oa);
+        serializeAcls(oa);  // 写入 acl 权限控制
+        serializeNodes(oa); // 写入真实 node 数据
     }
 
     public void deserialize(InputArchive ia, String tag) throws IOException {

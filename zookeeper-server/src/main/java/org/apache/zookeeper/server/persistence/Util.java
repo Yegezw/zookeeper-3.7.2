@@ -85,6 +85,9 @@ public class Util {
      * @return file name
      */
     public static String makeSnapshotName(long zxid) {
+        // snapshot.{zxid}
+        // snapshot.{zxid}.gz
+        // snapshot.{zxid}.snappy
         return FileSnap.SNAPSHOT_FILE_PREFIX + "."
                + Long.toHexString(zxid)
                + SnapStream.getStreamMode().getFileExtension();

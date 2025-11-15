@@ -123,6 +123,7 @@ public class QuorumPeerMain {
         }
 
         // Start and schedule the the purge task
+        // 事务日志和数据快照的周期清理
         DatadirCleanupManager purgeMgr = new DatadirCleanupManager(
             config.getDataDir(),
             config.getDataLogDir(),

@@ -18,12 +18,13 @@
 
 package org.apache.zookeeper.server;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.TimeUnit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * This class manages the cleanup of snapshots and corresponding transaction
@@ -102,6 +103,7 @@ public class DatadirCleanupManager {
             return;
         }
 
+        // 事务日志和数据快照的周期清理
         timer = new Timer("PurgeTask", true);
         TimerTask task = new PurgeTask(dataLogDir, snapDir, snapRetainCount);
         timer.scheduleAtFixedRate(task, 0, TimeUnit.HOURS.toMillis(purgeInterval));
@@ -138,6 +140,7 @@ public class DatadirCleanupManager {
         public void run() {
             LOG.info("Purge task started.");
             try {
+                // 事务日志和数据快照的周期清理
                 PurgeTxnLog.purge(logsDir, snapsDir, snapRetainCount);
             } catch (Exception e) {
                 LOG.error("Error occurred while purging.", e);
