@@ -778,7 +778,7 @@ public class LearnerHandler extends ZooKeeperThread {
          */
         boolean isPeerNewEpochZxid = (peerLastZxid & 0xffffffffL) == 0;
         // Keep track of the latest zxid which already queued
-        long currentZxid = peerLastZxid;
+        long currentZxid = peerLastZxid; // 非 Leader 节点最后处理的 zxid, 无论该事务是否提交
         boolean needSnap = true;
         ZKDatabase db = learnerMaster.getZKDatabase();
         boolean txnLogSyncEnabled = db.isTxnLogSyncEnabled();
@@ -786,8 +786,8 @@ public class LearnerHandler extends ZooKeeperThread {
         ReadLock rl = lock.readLock();
         try {
             rl.lock();
-            long maxCommittedLog = db.getmaxCommittedLog();
-            long minCommittedLog = db.getminCommittedLog();
+            long maxCommittedLog = db.getmaxCommittedLog(); // Leader 节点提议缓存队列 committedLog 的最大 zxid
+            long minCommittedLog = db.getminCommittedLog(); // Leader 节点提议缓存队列 committedLog 的最小 zxid
             long lastProcessedZxid = db.getDataTreeLastProcessedZxid();
 
             LOG.info("Synchronizing with Learner sid: {} maxCommittedLog=0x{}"
@@ -833,7 +833,7 @@ public class LearnerHandler extends ZooKeeperThread {
             if (forceSnapSync) {
                 // Force learnerMaster to use snapshot to sync with follower
                 LOG.warn("Forcing snapshot sync - should not see this in production");
-            } else if (lastProcessedZxid == peerLastZxid) {
+            } else if (lastProcessedZxid == peerLastZxid) { // 不需要同步
                 // Follower is already sync with us, send empty diff
                 LOG.info(
                     "Sending DIFF zxid=0x{} for peer sid: {}",
@@ -842,7 +842,7 @@ public class LearnerHandler extends ZooKeeperThread {
                 queueOpPacket(Leader.DIFF, peerLastZxid);
                 needOpPacket = false;
                 needSnap = false;
-            } else if (peerLastZxid > maxCommittedLog && !isPeerNewEpochZxid) {
+            } else if (peerLastZxid > maxCommittedLog && !isPeerNewEpochZxid) { // 仅回滚同步 TRUNC
                 // Newer than committedLog, send trunc and done
                 LOG.debug(
                     "Sending TRUNC to follower zxidToSend=0x{} for peer sid:{}",
@@ -852,13 +852,15 @@ public class LearnerHandler extends ZooKeeperThread {
                 currentZxid = maxCommittedLog;
                 needOpPacket = false;
                 needSnap = false;
-            } else if ((maxCommittedLog >= peerLastZxid) && (minCommittedLog <= peerLastZxid)) {
+            } else if ((maxCommittedLog >= peerLastZxid) && (minCommittedLog <= peerLastZxid)) { // 直接差异化同步 DIFF
+                // minCommittedLog <= peerLastZxid <= maxCommittedLog
+                // 差异化数据就是非 Leader 节点丢失的部分数据 (peerLastZxid ... maxCommittedLog]
                 // Follower is within commitLog range
                 LOG.info("Using committedLog for peer sid: {}", getSid());
                 Iterator<Proposal> itr = db.getCommittedLog().iterator();
                 currentZxid = queueCommittedProposals(itr, peerLastZxid, null, maxCommittedLog);
                 needSnap = false;
-            } else if (peerLastZxid < minCommittedLog && txnLogSyncEnabled) {
+            } else if (peerLastZxid < minCommittedLog && txnLogSyncEnabled) { // 全量同步 SNAP
                 // Use txnlog and committedLog to sync
 
                 // Calculate sizeLimit that we allow to retrieve txnlog from disk
