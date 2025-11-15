@@ -18,17 +18,17 @@
 
 package org.apache.zookeeper.server.persistence;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.Closeable;
-import java.io.EOFException;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.FilterInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.RandomAccessFile;
+import org.apache.jute.*;
+import org.apache.zookeeper.server.ServerMetrics;
+import org.apache.zookeeper.server.ServerStats;
+import org.apache.zookeeper.server.TxnLogEntry;
+import org.apache.zookeeper.server.util.SerializeUtils;
+import org.apache.zookeeper.txn.TxnDigest;
+import org.apache.zookeeper.txn.TxnHeader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayDeque;
@@ -38,19 +38,6 @@ import java.util.Queue;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.Adler32;
 import java.util.zip.Checksum;
-import org.apache.jute.BinaryInputArchive;
-import org.apache.jute.BinaryOutputArchive;
-import org.apache.jute.InputArchive;
-import org.apache.jute.OutputArchive;
-import org.apache.jute.Record;
-import org.apache.zookeeper.server.ServerMetrics;
-import org.apache.zookeeper.server.ServerStats;
-import org.apache.zookeeper.server.TxnLogEntry;
-import org.apache.zookeeper.server.util.SerializeUtils;
-import org.apache.zookeeper.txn.TxnDigest;
-import org.apache.zookeeper.txn.TxnHeader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * This class implements the TxnLog interface. It provides api's
@@ -280,28 +267,36 @@ public class FileTxnLog implements TxnLog, Closeable {
         } else {
             lastZxidSeen = hdr.getZxid();
         }
+        // 当服务器启动 (重启) 的时候会产生新文件
         if (logStream == null) {
             LOG.info("Creating new log file: {}", Util.makeLogName(hdr.getZxid()));
 
+            // 创建事务日志文件
             logFileWrite = new File(logDir, Util.makeLogName(hdr.getZxid()));
             fos = new FileOutputStream(logFileWrite);
             logStream = new BufferedOutputStream(fos);
             oa = BinaryOutputArchive.getArchive(logStream);
             FileHeader fhdr = new FileHeader(TXNLOG_MAGIC, VERSION, dbId);
-            fhdr.serialize(oa, "fileheader");
+            fhdr.serialize(oa, "fileheader"); // 文件头
             // Make sure that the magic number is written before padding.
             logStream.flush();
-            filePadding.setCurrentSize(fos.getChannel().position());
+            filePadding.setCurrentSize(fos.getChannel().position()); // 设置当前文件大小
             streamsToFlush.add(fos);
         }
+        // 磁盘 Seek: 为文件开辟新的磁盘块
+        // 固定文件大小, 提前填充内容进去, 防止文件大小每次变化都会带来一次磁盘 Seek, 提升性能
         filePadding.padFile(fos.getChannel());
+
+        // 写入事务日志
         byte[] buf = Util.marshallTxnEntry(hdr, txn, digest);
         if (buf == null || buf.length == 0) {
             throw new IOException("Faulty serialization for header " + "and txn");
         }
+        // 生成校验和
         Checksum crc = makeChecksumAlgorithm();
         crc.update(buf, 0, buf.length);
         oa.writeLong(crc.getValue(), "txnEntryCRC");
+        // 将二进制数据流写入文件 (os cache)
         Util.writeTxnBytes(oa, buf);
 
         return true;

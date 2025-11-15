@@ -18,11 +18,12 @@
 
 package org.apache.zookeeper.server.persistence;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class FilePadding {
 
@@ -73,8 +74,10 @@ public class FilePadding {
      * @throws IOException
      */
     long padFile(FileChannel fileChannel) throws IOException {
+        // 是否需要扩充文件 64MB
         long newFileSize = calculateFileSizeWithPadding(fileChannel.position(), currentSize, preAllocSize);
         if (currentSize != newFileSize) {
+            // 写空数据到文件
             fileChannel.write((ByteBuffer) fill.position(0), newFileSize - fill.remaining());
             currentSize = newFileSize;
         }

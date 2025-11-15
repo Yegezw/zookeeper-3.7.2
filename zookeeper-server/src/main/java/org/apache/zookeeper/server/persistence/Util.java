@@ -18,18 +18,6 @@
 
 package org.apache.zookeeper.server.persistence;
 
-import java.io.ByteArrayOutputStream;
-import java.io.EOFException;
-import java.io.File;
-import java.io.IOException;
-import java.io.Serializable;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Properties;
 import org.apache.jute.BinaryOutputArchive;
 import org.apache.jute.InputArchive;
 import org.apache.jute.OutputArchive;
@@ -38,6 +26,10 @@ import org.apache.zookeeper.txn.TxnDigest;
 import org.apache.zookeeper.txn.TxnHeader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.*;
+import java.net.URI;
+import java.util.*;
 
 /**
  * A collection of utility methods for dealing with file name parsing,
@@ -82,6 +74,7 @@ public class Util {
      * @return file name
      */
     public static String makeLogName(long zxid) {
+        // log.{zxid}
         return FileTxnLog.LOG_FILE_PREFIX + "." + Long.toHexString(zxid);
     }
 
@@ -189,13 +182,17 @@ public class Util {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         OutputArchive boa = BinaryOutputArchive.getArchive(baos);
 
+        // 写入事务头
         hdr.serialize(boa, "hdr");
+        // 写入事务数据
         if (txn != null) {
             txn.serialize(boa, "txn");
         }
+        // 写入签名
         if (digest != null) {
             digest.serialize(boa, "digest");
         }
+        // 返回字节数组
         return baos.toByteArray();
     }
 
