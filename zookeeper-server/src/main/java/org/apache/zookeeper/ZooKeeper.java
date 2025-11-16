@@ -1907,6 +1907,7 @@ public class ZooKeeper implements AutoCloseable {
         PathUtils.validatePath(clientPath);
 
         // the watch contains the un-chroot path
+        // 包装 Watcher
         WatchRegistration wcb = null;
         if (watcher != null) {
             wcb = new DataWatchRegistration(watcher, clientPath);
@@ -1918,9 +1919,9 @@ public class ZooKeeper implements AutoCloseable {
         h.setType(ZooDefs.OpCode.getData);
         GetDataRequest request = new GetDataRequest();
         request.setPath(serverPath);
-        request.setWatch(watcher != null);
-        GetDataResponse response = new GetDataResponse();
-        ReplyHeader r = cnxn.submitRequest(h, request, response, wcb);
+        request.setWatch(watcher != null); // 封装请求
+        GetDataResponse response = new GetDataResponse(); // 构造响应
+        ReplyHeader r = cnxn.submitRequest(h, request, response, wcb); // 将数据和 Watcher 发送请求给 Server
         if (r.getErr() != 0) {
             throw KeeperException.create(KeeperException.Code.get(r.getErr()), clientPath);
         }

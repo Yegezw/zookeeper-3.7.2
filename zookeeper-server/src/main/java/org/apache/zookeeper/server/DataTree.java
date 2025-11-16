@@ -73,7 +73,7 @@ public class DataTree {
      */
     private final NodeHashMap nodes; // 内存节点树
 
-    private IWatchManager dataWatches;
+    private IWatchManager dataWatches; // WatchManager
 
     private IWatchManager childWatches;
 
@@ -594,7 +594,7 @@ public class DataTree {
         }
 
         WatcherOrBitSet processed = dataWatches.triggerWatch(path, EventType.NodeDeleted);
-        childWatches.triggerWatch(path, EventType.NodeDeleted, processed);
+        childWatches.triggerWatch(path, EventType.NodeDeleted, processed); // 触发回调
         childWatches.triggerWatch("".equals(parentName) ? "/" : parentName, EventType.NodeChildrenChanged);
     }
 
@@ -666,7 +666,7 @@ public class DataTree {
         synchronized (n) {
             n.copyStat(stat);
             if (watcher != null) {
-                dataWatches.addWatch(path, watcher);
+                dataWatches.addWatch(path, watcher); // 保存 Watcher
             }
             data = n.data;
         }

@@ -340,7 +340,7 @@ public class FinalRequestProcessor implements RequestProcessor {
                 GetDataRequest getDataRequest = new GetDataRequest();
                 ByteBufferInputStream.byteBuffer2Record(request.request, getDataRequest);
                 path = getDataRequest.getPath();
-                rsp = handleGetDataRequest(getDataRequest, cnxn, request.authInfo);
+                rsp = handleGetDataRequest(getDataRequest, cnxn, request.authInfo); // 查询数据
                 requestPathMetricsCollector.registerRequest(request.type, path);
                 break;
             }
@@ -615,6 +615,9 @@ public class FinalRequestProcessor implements RequestProcessor {
         return new GetChildrenResponse(children);
     }
 
+    /**
+     * 查询数据
+     */
     private Record handleGetDataRequest(Record request, ServerCnxn cnxn, List<Id> authInfo) throws KeeperException, IOException {
         GetDataRequest getDataRequest = (GetDataRequest) request;
         String path = getDataRequest.getPath();

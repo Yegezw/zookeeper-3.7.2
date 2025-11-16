@@ -20,6 +20,7 @@ package org.apache.zookeeper;
 
 import org.apache.yetus.audience.InterfaceAudience;
 
+// 观察者
 /**
  * This interface specifies the public interface an event handler class must
  * implement. A ZooKeeper client will get various events from the ZooKeeper

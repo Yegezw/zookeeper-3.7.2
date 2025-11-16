@@ -18,13 +18,6 @@
 
 package org.apache.zookeeper.server.watch;
 
-import java.io.PrintWriter;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.Watcher.Event.EventType;
@@ -35,6 +28,11 @@ import org.apache.zookeeper.server.ZooTrace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.PrintWriter;
+import java.util.*;
+import java.util.Map.Entry;
+
+// 被观察者, 持有观察者集合
 /**
  * This class manages watches. It allows watches to be associated with a string
  * and removes watchers and their watches in addition to managing triggers.
@@ -43,8 +41,14 @@ public class WatchManager implements IWatchManager {
 
     private static final Logger LOG = LoggerFactory.getLogger(WatchManager.class);
 
+    /**
+     * path -> Set[Watcher] 某个路径被多个客户端监听
+     */
     private final Map<String, Set<Watcher>> watchTable = new HashMap<>();
 
+    /**
+     * Watcher -> Set[path] 某个客户端监听了多个路径
+     */
     private final Map<Watcher, Set<String>> watch2Paths = new HashMap<>();
 
     private final WatcherModeManager watcherModeManager = new WatcherModeManager();
@@ -165,7 +169,7 @@ public class WatchManager implements IWatchManager {
             if (supress != null && supress.contains(w)) {
                 continue;
             }
-            w.process(e);
+            w.process(e); // 触发回调
         }
 
         switch (type) {
