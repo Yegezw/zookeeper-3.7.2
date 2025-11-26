@@ -233,8 +233,9 @@ public class ZooKeeper implements AutoCloseable {
          * add the watch on the path.
          */
         public void register(int rc) {
+            // 根据响应码决定是否应该添加 watch 到 ZKWatchManager
             if (shouldAddWatch(rc)) {
-                Map<String, Set<Watcher>> watches = getWatches(rc);
+                Map<String, Set<Watcher>> watches = getWatches(rc); // 不同的子类有不同的实现
                 synchronized (watches) {
                     Set<Watcher> watchers = watches.get(clientPath);
                     if (watchers == null) {
@@ -1941,7 +1942,7 @@ public class ZooKeeper implements AutoCloseable {
         h.setType(ZooDefs.OpCode.getData);
         GetDataRequest request = new GetDataRequest();
         request.setPath(serverPath);
-        request.setWatch(watcher != null); // 封装请求
+        request.setWatch(watcher != null);                // 封装请求, watcher 为 boolean
         GetDataResponse response = new GetDataResponse(); // 构造响应
         ReplyHeader r = cnxn.submitRequest(h, request, response, wcb); // 将数据和 Watcher 发送请求给 Server
         if (r.getErr() != 0) {

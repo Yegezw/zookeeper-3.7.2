@@ -138,10 +138,25 @@ public interface Watcher {
          */
         @InterfaceAudience.Public
         enum EventType {
+            /**
+             * 无
+             */
             None(-1),
+            /**
+             * 创建
+             */
             NodeCreated(1),
+            /**
+             * 删除
+             */
             NodeDeleted(2),
+            /**
+             * 数据发生更改时 (无论数据是否真的变化)
+             */
             NodeDataChanged(3),
+            /**
+             * 子节点列表发生变更时
+             */
             NodeChildrenChanged(4),
             DataWatchRemoved(5),
             ChildWatchRemoved(6),

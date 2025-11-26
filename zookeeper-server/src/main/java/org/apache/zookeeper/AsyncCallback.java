@@ -18,10 +18,11 @@
 
 package org.apache.zookeeper;
 
-import java.util.List;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.zookeeper.data.ACL;
 import org.apache.zookeeper.data.Stat;
+
+import java.util.List;
 
 /**
  * Interface definitions of asynchronous callbacks.
@@ -34,10 +35,13 @@ import org.apache.zookeeper.data.Stat;
  * <p>It is highly recommended NOT to perform any blocking operation inside
  * the callbacks. If you block the thread the ZooKeeper client won't process
  * other events.
+ * 
+ * <p>异步回调由 {@link org.apache.zookeeper.ClientCnxn.EventThread#processEvent(Object)} 触发
  */
 @InterfaceAudience.Public
 public interface AsyncCallback {
 
+    // setData、setACL、exists
     /**
      * This callback is used to retrieve the stat of the node.
      */
@@ -71,6 +75,7 @@ public interface AsyncCallback {
 
     }
 
+    // getAllChildrenNumber
     /**
      * This callback is used to get all children node number of the node.
      *
@@ -90,6 +95,7 @@ public interface AsyncCallback {
 
     }
 
+    // getData
     /**
      * This callback is used to retrieve the data and stat of the node.
      */
@@ -122,6 +128,7 @@ public interface AsyncCallback {
 
     }
 
+    // getACL
     /**
      * This callback is used to retrieve the ACL and stat of the node.
      */
@@ -151,6 +158,7 @@ public interface AsyncCallback {
 
     }
 
+    // getChildren
     /**
      * This callback is used to retrieve the children of the node.
      */
@@ -180,6 +188,7 @@ public interface AsyncCallback {
 
     }
 
+    // getChildren
     /**
      * This callback is used to retrieve the children and stat of the node.
      */
@@ -203,6 +212,7 @@ public interface AsyncCallback {
 
     }
 
+    // create
     /**
      * This callback is used to retrieve the name and stat of the node.
      */
@@ -228,6 +238,7 @@ public interface AsyncCallback {
 
     }
 
+    // create
     /**
      * This callback is used to retrieve the name of the node.
      */
@@ -263,6 +274,7 @@ public interface AsyncCallback {
 
     }
 
+    // delete
     /**
      * This callback doesn't retrieve anything from the node. It is useful for some APIs
      * that doesn't want anything sent back, e.g. {@link ZooKeeper#sync(String, AsyncCallback.VoidCallback, Object)}.
@@ -300,6 +312,7 @@ public interface AsyncCallback {
 
     }
 
+    // multi
     /**
      * This callback is used to process the multiple results from a single multi call.
      */
@@ -329,6 +342,7 @@ public interface AsyncCallback {
 
     }
 
+    // getEphemerals
     /**
      * This callback is used to process the getEphemerals results from a single getEphemerals call.
      *

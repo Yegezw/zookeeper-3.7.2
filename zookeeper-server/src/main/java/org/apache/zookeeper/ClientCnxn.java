@@ -133,6 +133,9 @@ public class ClientCnxn {
 
     private final int sessionTimeout;
 
+    /**
+     * Watch 管理器
+     */
     private final ZKWatchManager watchManager;
 
     /**
@@ -289,6 +292,9 @@ public class ClientCnxn {
          */
         Object ctx;
 
+        /**
+         * 事件注册
+         */
         WatchRegistration watchRegistration;
 
         /**
@@ -296,6 +302,9 @@ public class ClientCnxn {
          */
         public boolean readOnly;
 
+        /**
+         * 事件注销
+         */
         WatchDeregistration watchDeregistration;
 
         /** Convenience ctor */
@@ -490,6 +499,9 @@ public class ClientCnxn {
 
     class EventThread extends ZooKeeperThread {
 
+        /**
+         * 完成响应的包, 等待异步回调
+         */
         private final LinkedBlockingQueue<Object> waitingEvents = new LinkedBlockingQueue<Object>();
 
         /** This is really the queued session state until the event
@@ -556,11 +568,11 @@ public class ClientCnxn {
             try {
                 isRunning = true;
                 while (true) {
-                    Object event = waitingEvents.take();
+                    Object event = waitingEvents.take(); // 从 waitingEvents 中删除 p
                     if (event == eventOfDeath) {
                         wasKilled = true;
                     } else {
-                        processEvent(event);
+                        processEvent(event); // 处理事件
                     }
                     if (wasKilled) {
                         synchronized (waitingEvents) {
@@ -614,6 +626,7 @@ public class ClientCnxn {
                         ((VoidCallback) lcb.cb).processResult(lcb.rc, lcb.path, lcb.ctx);
                     }
                 } else {
+                    // 触发异步回调
                     Packet p = (Packet) event;
                     int rc = 0;
                     String clientPath = p.clientPath;
@@ -747,6 +760,7 @@ public class ClientCnxn {
     protected void finishPacket(Packet p) {
         int err = p.replyHeader.getErr();
         if (p.watchRegistration != null) {
+            // 不同类型的 WatchRegistration 负责将 Watcher 注册到 ZKWatchManager 不同的集合中
             p.watchRegistration.register(err);
         }
         // Add all the removed watch events to the event queue, so that the
@@ -771,6 +785,7 @@ public class ClientCnxn {
             }
         }
 
+        // 三大队列 outgoingQueue -> pendingQueue -> waitingEvents
         if (p.cb == null) {
             // 不存在异步回调
             synchronized (p) {
