@@ -109,11 +109,13 @@ public class ClientCnxn {
 
     /**
      * These are the packets that have been sent and are waiting for a response.
+     * <br>已经发送出去但还在等待响应的包
      */
     private final Queue<Packet> pendingQueue = new ArrayDeque<>();
 
     /**
      * These are the packets that need to be sent.
+     * <br>需要发送的包
      */
     private final LinkedBlockingDeque<Packet> outgoingQueue = new LinkedBlockingDeque<Packet>();
 
@@ -150,8 +152,14 @@ public class ClientCnxn {
 
     final String chrootPath;
 
+    /**
+     * 发送线程
+     */
     final SendThread sendThread;
 
+    /**
+     * 事件处理线程
+     */
     final EventThread eventThread;
 
     /**
@@ -230,29 +238,62 @@ public class ClientCnxn {
      */
     static class Packet {
 
+        /**
+         * 请求头内有 xid
+         */
         RequestHeader requestHeader;
 
+        /**
+         * 响应头内有 xid
+         */
         ReplyHeader replyHeader;
 
+        /**
+         * 请求
+         */
         Record request;
 
+        /**
+         * 响应
+         */
         Record response;
 
+        /**
+         * 发送请求时 {@link Packet#createBB()} 会把数据序列化到 bb 中
+         */
         ByteBuffer bb;
 
-        /** Client's view of the path (may differ due to chroot) **/
+        /**
+         * Client's view of the path (may differ due to chroot)
+         * <br>客户端对路径的视图 (可能因 chroot 而有所不同)
+         */
         String clientPath;
-        /** Servers's view of the path (may differ due to chroot) **/
+        /**
+         * Servers's view of the path (may differ due to chroot)
+         * <br>服务端对路径的视图 (可能因 chroot 而有所不同)
+         */
         String serverPath;
 
+        /**
+         * 是否响应完成
+         */
         boolean finished;
 
+        /**
+         * 异步回调
+         */
         AsyncCallback cb;
 
+        /**
+         * 传递给异步调用的上下文对象
+         */
         Object ctx;
 
         WatchRegistration watchRegistration;
 
+        /**
+         * 只读
+         */
         public boolean readOnly;
 
         WatchDeregistration watchDeregistration;
@@ -285,8 +326,8 @@ public class ClientCnxn {
 
         public void createBB() {
             try {
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                BinaryOutputArchive boa = BinaryOutputArchive.getArchive(baos);
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();       // 自动扩容的字节数组
+                BinaryOutputArchive boa = BinaryOutputArchive.getArchive(baos); // 底层使用 baos 来存储数据
                 boa.writeInt(-1, "len"); // We'll fill this in later
                 if (requestHeader != null) {
                     requestHeader.serialize(boa, "header");
@@ -731,11 +772,13 @@ public class ClientCnxn {
         }
 
         if (p.cb == null) {
+            // 不存在异步回调
             synchronized (p) {
                 p.finished = true;
-                p.notifyAll();
+                p.notifyAll(); // 唤醒请求线程
             }
         } else {
+            // 存在异步回调
             p.finished = true;
             eventThread.queuePacket(p);
         }
@@ -860,6 +903,7 @@ public class ClientCnxn {
             BinaryInputArchive bbia = BinaryInputArchive.getArchive(bbis);
             ReplyHeader replyHdr = new ReplyHeader();
 
+            // 拿到响应的 xid
             replyHdr.deserialize(bbia, "header");
             switch (replyHdr.getXid()) {
             case PING_XID:
@@ -912,7 +956,7 @@ public class ClientCnxn {
                 if (pendingQueue.size() == 0) {
                     throw new IOException("Nothing in the queue, but got " + replyHdr.getXid());
                 }
-                packet = pendingQueue.remove();
+                packet = pendingQueue.remove(); // 等待响应的包
             }
             /*
              * Since requests are processed in order, we better get a response
@@ -934,7 +978,7 @@ public class ClientCnxn {
                     lastZxid = replyHdr.getZxid();
                 }
                 if (packet.response != null && replyHdr.getErr() == 0) {
-                    packet.response.deserialize(bbia, "response");
+                    packet.response.deserialize(bbia, "response"); // 将响应反序列化并赋值给 packet.response
                 }
 
                 LOG.debug("Reading reply session id: 0x{}, packet:: {}", Long.toHexString(sessionId), packet);
@@ -1262,6 +1306,7 @@ public class ClientCnxn {
                         to = Math.min(to, pingRwTimeout - idlePingRwServer);
                     }
 
+                    // 核心
                     clientCnxnSocket.doTransport(to, pendingQueue, ClientCnxn.this);
                 } catch (Throwable e) {
                     // 关闭中
@@ -1520,6 +1565,10 @@ public class ClientCnxn {
     }
 
     // @VisibleForTesting
+    /**
+     * 每个 {@link ClientCnxnSocketNIO#doIO(Queue, ClientCnxn)} 发送的 {@link Packet} 都会设置 requestHeader.xid -> 发送 -> 扔到 pendingQueue, 
+     * 接收到响应后由 {@link SendThread#readResponse(ByteBuffer)} 负责读取响应的 xid, 
+     */
     protected int xid = 1;
 
     // @VisibleForTesting
@@ -1554,6 +1603,7 @@ public class ClientCnxn {
         WatchRegistration watchRegistration,
         WatchDeregistration watchDeregistration) throws InterruptedException {
         ReplyHeader r = new ReplyHeader();
+        // 1. 包装成 packet 扔到 outgoingQueue, 由 SendThread#run -> ClientCnxnSocketNIO#doIO 发送给服务端
         Packet packet = queuePacket(
             h,
             r,
@@ -1565,14 +1615,15 @@ public class ClientCnxn {
             null,
             watchRegistration,
             watchDeregistration);
+        // 2. 阻塞当前线程, 等待 zookeeper 服务端响应后被 finishPacket() 唤醒
         synchronized (packet) {
             if (requestTimeout > 0) {
                 // Wait for request completion with timeout
-                waitForPacketFinish(r, packet);
+                waitForPacketFinish(r, packet); // 可超时等待
             } else {
                 // Wait for request completion infinitely
                 while (!packet.finished) {
-                    packet.wait();
+                    packet.wait();              // 无限等待
                 }
             }
         }

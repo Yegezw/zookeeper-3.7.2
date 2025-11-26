@@ -69,6 +69,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
         }
         // 接收到服务端响应
         if (sockKey.isReadable()) {
+            // 1. rc = 接收到的数据包的长度
             int rc = sock.read(incomingBuffer);
             if (rc < 0) {
                 throw new EndOfStreamException("Unable to read additional data from server sessionid 0x"
@@ -79,7 +80,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                 incomingBuffer.flip();
                 if (incomingBuffer == lenBuffer) {
                     recvCount.getAndIncrement();
-                    readLength();
+                    readLength(); // 2. 为 incomingBuffer 分配 rc 的 ByteBuffer
                 } else if (!initialized) {
                     readConnectResult();
                     enableRead();
@@ -93,7 +94,9 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                     updateLastHeard();
                     initialized = true;
                 } else {
+                    // 3. 读取数据 -> 通过 xid 关联起 pendingQueue 中的 Packet -> 给 packet.response 赋值
                     sendThread.readResponse(incomingBuffer);
+                    // 4. 重置 incomingBuffer
                     lenBuffer.clear();
                     incomingBuffer = lenBuffer;
                     updateLastHeard();
@@ -111,19 +114,19 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                     if ((p.requestHeader != null)
                         && (p.requestHeader.getType() != OpCode.ping)
                         && (p.requestHeader.getType() != OpCode.auth)) {
-                        p.requestHeader.setXid(cnxn.getXid());
+                        p.requestHeader.setXid(cnxn.getXid()); // 设置 xid
                     }
                     p.createBB(); // 构造 ByteBuffer 对象
                 }
                 sock.write(p.bb); // 发送
                 if (!p.bb.hasRemaining()) {
                     sentCount.getAndIncrement();
-                    outgoingQueue.removeFirstOccurrence(p);
+                    outgoingQueue.removeFirstOccurrence(p); // 从 outgoingQueue 中删除 p
                     if (p.requestHeader != null
                         && p.requestHeader.getType() != OpCode.ping
                         && p.requestHeader.getType() != OpCode.auth) {
                         synchronized (pendingQueue) {
-                            pendingQueue.add(p);
+                            pendingQueue.add(p); // 扔到 pendingQueue, 等待响应
                         }
                     }
                 }
@@ -346,7 +349,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                     sendThread.primeConnection();
                 }
             } else if ((k.readyOps() & (SelectionKey.OP_READ | SelectionKey.OP_WRITE)) != 0) {
-                doIO(pendingQueue, cnxn);
+                doIO(pendingQueue, cnxn); // 核心
             }
         }
         if (sendThread.getZkState().isConnected()) {
