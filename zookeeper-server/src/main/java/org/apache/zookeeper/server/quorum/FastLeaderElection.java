@@ -95,11 +95,12 @@ public class FastLeaderElection implements Election {
     }
 
     /**
+     * 负责集群内部节点之间的通信
+     * <p>
      * Connection manager. Fast leader election uses TCP for
      * communication between peers, and QuorumCnxManager manages
      * such connections.
      */
-
     QuorumCnxManager manager;
 
     private SyncedLearnerTracker leadingVoteSet;
@@ -556,14 +557,13 @@ public class FastLeaderElection implements Election {
          * @param manager   Connection manager
          */
         Messenger(QuorumCnxManager manager) {
-
+            // 发送线程
             this.ws = new WorkerSender(manager);
-
             this.wsThread = new Thread(this.ws, "WorkerSender[myid=" + self.getMyId() + "]");
             this.wsThread.setDaemon(true);
 
+            // 接收线程
             this.wr = new WorkerReceiver(manager);
-
             this.wrThread = new Thread(this.wr, "WorkerReceiver[myid=" + self.getMyId() + "]");
             this.wrThread.setDaemon(true);
         }
@@ -587,6 +587,9 @@ public class FastLeaderElection implements Election {
     }
 
     QuorumPeer self;
+    /**
+     * WorkerSender + WorkerReceiver
+     */
     Messenger messenger;
     AtomicLong logicalclock = new AtomicLong(); /* Election instance */
     /**
@@ -661,7 +664,7 @@ public class FastLeaderElection implements Election {
     public FastLeaderElection(QuorumPeer self, QuorumCnxManager manager) {
         this.stop = false;
         this.manager = manager;
-        starter(self, manager);
+        starter(self, manager); // WorkerSender + WorkerReceiver
     }
 
     /**
@@ -679,9 +682,9 @@ public class FastLeaderElection implements Election {
         proposedLeader = -1;
         proposedZxid = -1;
 
-        sendqueue = new LinkedBlockingQueue<ToSend>();
-        recvqueue = new LinkedBlockingQueue<Notification>();
-        this.messenger = new Messenger(manager);
+        sendqueue = new LinkedBlockingQueue<ToSend>();       // 发送队列, WorkerSender 会把它扔到 QuorumCnxManager.queueSendMap
+        recvqueue = new LinkedBlockingQueue<Notification>(); // 接收队列, WorkerReceiver 会从 QuorumCnxManager.recvQueue 拿出数据放到这里
+        this.messenger = new Messenger(manager);             // WorkerSender + WorkerReceiver
     }
 
     /**
