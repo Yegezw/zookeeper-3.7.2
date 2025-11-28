@@ -332,12 +332,30 @@ public class ZooKeeper implements AutoCloseable {
 
     @InterfaceAudience.Public
     public enum States {
+        /**
+         * 连接中
+         */
         CONNECTING,
         ASSOCIATING,
+        /**
+         * 已连接
+         */
         CONNECTED,
+        /**
+         * 已连接 - 只读
+         */
         CONNECTEDREADONLY,
+        /**
+         * 已关闭
+         */
         CLOSED,
+        /**
+         * 认证失败
+         */
         AUTH_FAILED,
+        /**
+         * 未连接
+         */
         NOT_CONNECTED;
 
         public boolean isAlive() {
@@ -594,9 +612,11 @@ public class ZooKeeper implements AutoCloseable {
             watcher);
 
         this.clientConfig = clientConfig != null ? clientConfig : new ZKClientConfig();
-        this.hostProvider = hostProvider;
+        this.hostProvider = hostProvider; // 服务端的地址 StaticHostProvider
+        // 包装 chrootPath + 服务端的地址
         ConnectStringParser connectStringParser = new ConnectStringParser(connectString);
 
+        // 创建
         cnxn = createConnection(
             connectStringParser.getChrootPath(),
             hostProvider,
@@ -605,6 +625,7 @@ public class ZooKeeper implements AutoCloseable {
             watcher,
             getClientCnxnSocket(),
             canBeReadOnly);
+        // 启动
         cnxn.start();
     }
 
@@ -1085,6 +1106,7 @@ public class ZooKeeper implements AutoCloseable {
 
     // default hostprovider
     private static HostProvider createDefaultHostProvider(String connectString) {
+        // 将服务端的地址封装进 StaticHostProvider
         return new StaticHostProvider(new ConnectStringParser(connectString).getServerAddresses());
     }
 

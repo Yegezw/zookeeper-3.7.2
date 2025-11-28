@@ -18,18 +18,14 @@
 
 package org.apache.zookeeper.client;
 
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
+import java.util.*;
 
 /**
  * Most simple HostProvider, resolves on every next() call.
@@ -50,6 +46,9 @@ public final class StaticHostProvider implements HostProvider {
 
     private static final Logger LOG = LoggerFactory.getLogger(StaticHostProvider.class);
 
+    /**
+     * 服务端地址
+     */
     private List<InetSocketAddress> serverAddresses = new ArrayList<InetSocketAddress>(5);
 
     private Random sourceOfRandomness;
