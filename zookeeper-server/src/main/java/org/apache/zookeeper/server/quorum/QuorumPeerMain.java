@@ -119,7 +119,7 @@ public class QuorumPeerMain {
     protected void initializeAndRun(String[] args) throws ConfigException, IOException, AdminServerException {
         QuorumPeerConfig config = new QuorumPeerConfig();
         if (args.length == 1) {
-            config.parse(args[0]);
+            config.parse(args[0]); // 解析配置
         }
 
         // Start and schedule the the purge task

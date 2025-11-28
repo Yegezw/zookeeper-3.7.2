@@ -18,25 +18,6 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import static org.apache.zookeeper.common.NetUtils.formatInetAddr;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.StringReader;
-import java.io.Writer;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Properties;
 import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.zookeeper.common.AtomicFileWritingIdiom;
 import org.apache.zookeeper.common.AtomicFileWritingIdiom.OutputStreamStatement;
@@ -59,6 +40,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
+import java.io.*;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.util.*;
+import java.util.Map.Entry;
+
+import static org.apache.zookeeper.common.NetUtils.formatInetAddr;
+
 @InterfaceAudience.Public
 public class QuorumPeerConfig {
 
@@ -69,16 +59,31 @@ public class QuorumPeerConfig {
     private static boolean standaloneEnabled = true;
     private static boolean reconfigEnabled = false;
 
+    /**
+     * 2181 - TCP
+     */
     protected InetSocketAddress clientPortAddress;
+    /**
+     * 3181 - TLS
+     */
     protected InetSocketAddress secureClientPortAddress;
     protected boolean sslQuorum = false;
     protected boolean shouldUsePortUnification = false;
     protected int observerMasterPort;
     protected boolean sslQuorumReloadCertFiles = false;
+    /**
+     * 存储数据快照
+     */
     protected File dataDir;
+    /**
+     * 存储事务日志
+     */
     protected File dataLogDir;
     protected String dynamicConfigFileStr = null;
     protected String configFileStr = null;
+    /**
+     * 服务器与客户端之间的心跳时间间隔, 默认 3000 ms
+     */
     protected int tickTime = ZooKeeperServer.DEFAULT_TICK_TIME;
     protected int maxClientCnxns = 60;
     /** defaults to -1 if not set explicitly */
@@ -92,7 +97,13 @@ public class QuorumPeerConfig {
     /** defaults to -1 if not set explicitly */
     protected int clientPortListenBacklog = -1;
 
+    /**
+     * Leader 和 Follower 之间同步数据的最大时间 initLimit * tickTime
+     */
     protected int initLimit;
+    /**
+     * Leader 和 Follower 之间能容忍的最大请求响应时间 syncLimit * tickTime
+     */
     protected int syncLimit;
     protected int connectToLearnerMasterLimit;
     protected int electionAlg = 3;
@@ -102,12 +113,21 @@ public class QuorumPeerConfig {
     protected long serverId = UNSET_SERVERID;
 
     protected QuorumVerifier quorumVerifier = null, lastSeenQuorumVerifier = null;
+    /**
+     * 每次自动清理时要保留的版本数量, purgeInterval > 0 才会生效
+     */
     protected int snapRetainCount = 3;
+    /**
+     * 自动清理 "事务日志和数据快照" 的事件间隔 (小时)
+     */
     protected int purgeInterval = 0;
     protected boolean syncEnabled = true;
 
     protected String initialConfig;
 
+    /**
+     * 跟随者类型
+     */
     protected LearnerType peerType = LearnerType.PARTICIPANT;
 
     /**
