@@ -134,12 +134,12 @@ public class QuorumCnxManager {
      */
     final ConcurrentHashMap<Long, SendWorker> senderWorkerMap;             // key = sid, 发送者 Worker
     final ConcurrentHashMap<Long, BlockingQueue<ByteBuffer>> queueSendMap; // key = sid, 发送队列
-    final ConcurrentHashMap<Long, ByteBuffer> lastMessageSent;
+    final ConcurrentHashMap<Long, ByteBuffer> lastMessageSent;             // key = sid, 最后发送的消息
 
     /*
      * Reception queue
      */
-    public final BlockingQueue<Message> recvQueue; // 接收队列
+    public final BlockingQueue<Message> recvQueue; // 接收队列, 所有 RecvWorker 接收到的消息都会放在这里
 
     /*
      * Shutdown flag
@@ -149,6 +149,8 @@ public class QuorumCnxManager {
 
     /*
      * Listener thread
+     * 监听 3888 接收其它共识节点的连接, 用于选举投票
+     * 每个共识节点都有独立的线程来负责发送和接收 SendWorker + RecvWorker
      */
     public final Listener listener;
 
@@ -173,6 +175,9 @@ public class QuorumCnxManager {
     }
 
 
+    /**
+     * sid 的消息
+     */
     public static class Message {
 
         Message(ByteBuffer buffer, long sid) {
@@ -287,10 +292,10 @@ public class QuorumCnxManager {
         QuorumAuthServer authServer, QuorumAuthLearner authLearner, int socketTimeout, boolean listenOnAllIPs,
         int quorumCnxnThreadsSize, boolean quorumSaslAuthEnabled) {
 
-        this.recvQueue = new CircularBlockingQueue<>(RECV_CAPACITY);
-        this.queueSendMap = new ConcurrentHashMap<>();
-        this.senderWorkerMap = new ConcurrentHashMap<>();
-        this.lastMessageSent = new ConcurrentHashMap<>();
+        this.recvQueue = new CircularBlockingQueue<>(RECV_CAPACITY); // 接收队列
+        this.queueSendMap = new ConcurrentHashMap<>();               // key = sid, 发送队列
+        this.senderWorkerMap = new ConcurrentHashMap<>();            // key = sid, 发送者 Worker
+        this.lastMessageSent = new ConcurrentHashMap<>();            // key = sid, 最后发送的消息
 
         String cnxToValue = System.getProperty("zookeeper.cnxTimeout");
         if (cnxToValue != null) {
@@ -495,19 +500,17 @@ public class QuorumCnxManager {
             // Otherwise proceed with the connection
         } else {
             LOG.debug("Have larger server identifier, so keeping the connection: (myId:{} --> sid:{})", self.getMyId(), sid);
-            // 启动: 发送线程 + 接收线程
+            // SendWorker 和 RecvWorker 互相绑定
             SendWorker sw = new SendWorker(sock, sid);
             RecvWorker rw = new RecvWorker(sock, din, sid, sw);
             sw.setRecv(rw);
 
             SendWorker vsw = senderWorkerMap.get(sid);
-
             if (vsw != null) {
-                vsw.finish();
+                vsw.finish(); // 关闭旧连接 (若存在)
             }
 
             senderWorkerMap.put(sid, sw);
-
             queueSendMap.putIfAbsent(sid, new CircularBlockingQueue<>(SEND_CAPACITY));
 
             sw.start();
@@ -614,7 +617,8 @@ public class QuorumCnxManager {
 
         // do authenticating learner
         authServer.authenticate(sock, din);
-        //If wins the challenge, then close the new connection.
+        // If wins the challenge, then close the new connection.
+        // 只能大连小, 不能小连大: 只能和比自己 sid 小的节点进行连接, 如果目标 sid < self_sid 就关闭连接, 然后主动连接对方
         if (sid < self.getMyId()) {
             /*
              * This replica might still believe that the connection to sid is
@@ -623,19 +627,20 @@ public class QuorumCnxManager {
              */
             SendWorker sw = senderWorkerMap.get(sid);
             if (sw != null) {
-                sw.finish();
+                sw.finish(); // 终止旧的 SendWorker 线程
             }
 
             /*
              * Now we start a new connection
              */
             LOG.debug("Create new connection to server: {}", sid);
-            closeSocket(sock);
+            closeSocket(sock); // 关闭连接
 
+            // 主动发起连接到对方节点
             if (electionAddr != null) {
-                connectOne(sid, electionAddr);
+                connectOne(sid, electionAddr); // 用对方提供的选举地址连接
             } else {
-                connectOne(sid);
+                connectOne(sid);               // 用本地配置的对方选举地址连接
             }
 
         } else if (sid == self.getMyId()) {
@@ -643,18 +648,17 @@ public class QuorumCnxManager {
             LOG.warn("We got a connection request from a server with our own ID. "
                      + "This should be either a configuration error, or a bug.");
         } else { // Otherwise start worker threads to receive data.
+            // SendWorker 和 RecvWorker 互相绑定
             SendWorker sw = new SendWorker(sock, sid);
             RecvWorker rw = new RecvWorker(sock, din, sid, sw);
             sw.setRecv(rw);
 
             SendWorker vsw = senderWorkerMap.get(sid);
-
             if (vsw != null) {
-                vsw.finish();
+                vsw.finish(); // 关闭旧连接 (若存在)
             }
 
             senderWorkerMap.put(sid, sw);
-
             queueSendMap.putIfAbsent(sid, new CircularBlockingQueue<>(SEND_CAPACITY));
 
             sw.start();
@@ -682,7 +686,7 @@ public class QuorumCnxManager {
              */
             BlockingQueue<ByteBuffer> bq = queueSendMap.computeIfAbsent(sid, serverId -> new CircularBlockingQueue<>(SEND_CAPACITY));
             addToSendQueue(bq, b); // 扔到发送队列
-            connectOne(sid);
+            connectOne(sid);       // 如果还没有连接, 会建立新的连接
         }
     }
 
@@ -924,7 +928,7 @@ public class QuorumCnxManager {
         public void run() {
             if (!shutdown) {
                 LOG.debug("Listener thread started, myId: {}", self.getMyId());
-                Set<InetSocketAddress> addresses;
+                Set<InetSocketAddress> addresses; // 3888 用于选举投票
 
                 if (self.getQuorumListenOnAllIPs()) {
                     addresses = self.getElectionAddress().getWildcardAddresses();
@@ -939,7 +943,7 @@ public class QuorumCnxManager {
 
                 final ExecutorService executor = Executors.newFixedThreadPool(addresses.size());
                 try {
-                    listenerHandlers.forEach(executor::submit);
+                    listenerHandlers.forEach(executor::submit); // 启动所有 ListenerHandler 线程
                 } finally {
                     // prevent executor's threads to leak after ListenerHandler tasks complete
                     executor.shutdown();
@@ -995,7 +999,13 @@ public class QuorumCnxManager {
         }
 
         class ListenerHandler implements Runnable, Closeable {
+            /**
+             * 接收其它共识节点的连接
+             */
             private ServerSocket serverSocket;
+            /**
+             * 3888 用于选举投票
+             */
             private InetSocketAddress address;
             private boolean portUnification;
             private boolean sslQuorum;
@@ -1051,7 +1061,7 @@ public class QuorumCnxManager {
                         LOG.info("{} is accepting connections now, my election bind port: {}", QuorumCnxManager.this.mySid, address.toString());
                         while (!shutdown) {
                             try {
-                                client = serverSocket.accept();
+                                client = serverSocket.accept(); // 接收其它共识节点的连接
                                 setSockOpts(client);
                                 LOG.info("Received connection request from {}", client.getRemoteSocketAddress());
                                 // Receive and handle the connection request
@@ -1062,7 +1072,7 @@ public class QuorumCnxManager {
                                 if (quorumSaslAuthEnabled) {
                                     receiveConnectionAsync(client);
                                 } else {
-                                    receiveConnection(client);
+                                    receiveConnection(client); // 处理其它共识节点的连接
                                 }
                                 numRetries = 0;
                             } catch (SocketTimeoutException e) {
