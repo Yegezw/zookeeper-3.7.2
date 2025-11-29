@@ -980,12 +980,12 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             // Possible since it's just deserialized from a packet on the wire.
             passwd = new byte[0];
         }
-        long sessionId = sessionTracker.createSession(timeout);
+        long sessionId = sessionTracker.createSession(timeout); // 创建 session
         Random r = new Random(sessionId ^ superSecret);
         r.nextBytes(passwd);
         ByteBuffer to = ByteBuffer.allocate(4);
         to.putInt(timeout);
-        cnxn.setSessionId(sessionId);
+        cnxn.setSessionId(sessionId); // 设置 sessionId
         Request si = new Request(cnxn, sessionId, 0, OpCode.createSession, to, null);
         submitRequest(si);
         return sessionId;
@@ -1465,7 +1465,6 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             cnxn.setSessionId(sessionId);
             reopenSession(cnxn, sessionId, passwd, sessionTimeout);
             ServerMetrics.getMetrics().CONNECTION_REVALIDATE_COUNT.add(1);
-
         }
     }
 

@@ -59,6 +59,9 @@ public abstract class ServerCnxnFactory {
     protected int maxCnxns;
 
     // sessionMap is used by closeSession()
+    /**
+     * sessionId -> NIOServerCnxn
+     */
     final ConcurrentHashMap<Long, ServerCnxn> sessionMap = new ConcurrentHashMap<Long, ServerCnxn>();
 
     private static String loginUser = Login.SYSTEM_USER;

@@ -33,6 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+// 负责创建 Session 和维护 Session 的过期时间
 /**
  * This is a full featured SessionTracker. It tracks session in grouped by tick
  * interval. It always rounds up the tick interval to provide a sort of grace
@@ -273,10 +274,13 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
 
     public long createSession(int sessionTimeout) {
         long sessionId = nextSessionId.getAndIncrement();
-        trackSession(sessionId, sessionTimeout);
+        trackSession(sessionId, sessionTimeout); // 维护 SessionId -> SessionImpl 和 SessionImpl 过期时间
         return sessionId;
     }
 
+    /**
+     * 维护 SessionId -> SessionImpl 和 SessionImpl 过期时间
+     */
     @Override
     public synchronized boolean trackSession(long id, int sessionTimeout) {
         boolean added = false;
@@ -288,7 +292,7 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
 
         // findbugs2.0.3 complains about get after put.
         // long term strategy would be use computeIfAbsent after JDK 1.8
-        SessionImpl existedSession = sessionsById.putIfAbsent(id, session);
+        SessionImpl existedSession = sessionsById.putIfAbsent(id, session); // 维护 SessionId -> SessionImpl
 
         if (existedSession != null) {
             session = existedSession;
@@ -306,7 +310,7 @@ public class SessionTrackerImpl extends ZooKeeperCriticalThread implements Sessi
                 + " session 0x" + Long.toHexString(id) + " " + sessionTimeout);
         }
 
-        updateSessionExpiry(session, sessionTimeout);
+        updateSessionExpiry(session, sessionTimeout); // 维护 SessionImpl 过期时间
         return added;
     }
 

@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class ExpiryQueue<E> {
 
     /**
-     * NIOServerCnxn(Session) -> 过期时间
+     * NIOServerCnxn OR SessionImpl -> 过期时间
      */
     private final ConcurrentHashMap<E, Long> elemMap = new ConcurrentHashMap<E, Long>();
     /**
@@ -44,7 +44,7 @@ public class ExpiryQueue<E> {
      * so the expirationInterval should not be too small compared to the
      * max timeout that this expiry queue needs to maintain.
      */
-    private final ConcurrentHashMap<Long, Set<E>> expiryMap = new ConcurrentHashMap<Long, Set<E>>(); // 过期时间 -> NIOServerCnxn(Session) 集合
+    private final ConcurrentHashMap<Long, Set<E>> expiryMap = new ConcurrentHashMap<Long, Set<E>>(); // 过期时间 -> 集合 <NIOServerCnxn OR SessionImpl>
 
     /**
      * 下个过期时间

@@ -187,7 +187,7 @@ public class NIOServerCnxn extends ServerCnxn {
     /** Read the request payload (everything following the length prefix) */
     private void readPayload() throws IOException, InterruptedException, ClientCnxnLimitException {
         if (incomingBuffer.remaining() != 0) { // have we read length bytes?
-            int rc = sock.read(incomingBuffer); // sock is non-blocking, so ok
+            int rc = sock.read(incomingBuffer); // sock is non-blocking, so ok 3. 读取数据
             if (rc < 0) {
                 handleFailedRead();
             }
@@ -197,10 +197,10 @@ public class NIOServerCnxn extends ServerCnxn {
             incomingBuffer.flip();
             packetReceived(4 + incomingBuffer.remaining());
             if (!initialized) {
-                // 接收请求
+                // 连接请求
                 readConnectRequest();
             } else {
-                // 处理请求
+                // 业务请求
                 readRequest();
             }
             lenBuffer.clear();
@@ -344,6 +344,7 @@ public class NIOServerCnxn extends ServerCnxn {
             }
             // 接收客户端请求
             if (k.isReadable()) {
+                // 1. rc = 接收到的数据包的长度
                 int rc = sock.read(incomingBuffer);
                 if (rc < 0) {
                     try {
@@ -360,14 +361,14 @@ public class NIOServerCnxn extends ServerCnxn {
                     boolean isPayload;
                     if (incomingBuffer == lenBuffer) { // start of next request
                         incomingBuffer.flip();
-                        isPayload = readLength(k);
+                        isPayload = readLength(k); // 2. 为 incomingBuffer 分配 rc 的 ByteBuffer
                         incomingBuffer.clear();
                     } else {
                         // continuation
                         isPayload = true;
                     }
                     if (isPayload) { // not the case for 4letterword
-                        readPayload(); // 处理
+                        readPayload(); // 3. 读取数据 -> 处理
                     } else {
                         // four letter words take care
                         // need not do anything else
@@ -447,7 +448,7 @@ public class NIOServerCnxn extends ServerCnxn {
         if (!isZKServerRunning()) {
             throw new IOException("ZooKeeperServer not running");
         }
-        zkServer.processConnectRequest(this, incomingBuffer);
+        zkServer.processConnectRequest(this, incomingBuffer); // 处理连接请求, 创建 Session
         initialized = true;
     }
 
