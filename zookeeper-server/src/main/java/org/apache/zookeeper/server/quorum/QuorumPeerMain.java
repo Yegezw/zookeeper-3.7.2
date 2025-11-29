@@ -166,6 +166,7 @@ public class QuorumPeerMain {
             ServerCnxnFactory secureCnxnFactory = null;
 
             if (config.getClientPortAddress() != null) {
+                // 服务端连接工厂 NIOServerCnxnFactory, 监听 2181 接收客户端连接并包装为 NIOServerCnxn, 读写事件包装为 IOWorkRequest 交给 WorkerService 线程池
                 cnxnFactory = ServerCnxnFactory.createFactory();
                 cnxnFactory.configure(config.getClientPortAddress(), config.getMaxClientCnxns(), config.getClientPortListenBacklog(), false);
             }

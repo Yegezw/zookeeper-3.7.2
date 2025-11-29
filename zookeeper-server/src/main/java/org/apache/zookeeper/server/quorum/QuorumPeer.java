@@ -1021,6 +1021,9 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
      */
     Election electionAlg;
 
+    /**
+     * {@link NIOServerCnxnFactory} 监听 2181 接收客户端连接
+     */
     ServerCnxnFactory cnxnFactory;
     ServerCnxnFactory secureCnxnFactory;
 
@@ -2075,6 +2078,10 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
     }
 
     // Leader and learner will control the zookeeper server and pass it into QuorumPeer.
+    /**
+     * 待 Leader 选举完成后, 当前节点就会知道自己的角色, 然后创建对应的 ZooKeeperServer
+     * <br>进入各自角色的主流程, 由 {@link Leader#lead()} 和 {@link Learner#syncWithLeader(long)} 调用
+     */
     public void setZooKeeperServer(ZooKeeperServer zks) {
         if (cnxnFactory != null) {
             cnxnFactory.setZooKeeperServer(zks);

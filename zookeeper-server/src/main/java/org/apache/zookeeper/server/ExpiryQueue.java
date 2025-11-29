@@ -35,14 +35,16 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class ExpiryQueue<E> {
 
-    // Session -> 过期时间
+    /**
+     * NIOServerCnxn(Session) -> 过期时间
+     */
     private final ConcurrentHashMap<E, Long> elemMap = new ConcurrentHashMap<E, Long>();
     /**
      * The maximum number of buckets is equal to max timeout/expirationInterval,
      * so the expirationInterval should not be too small compared to the
      * max timeout that this expiry queue needs to maintain.
      */
-    private final ConcurrentHashMap<Long, Set<E>> expiryMap = new ConcurrentHashMap<Long, Set<E>>(); // 过期时间 -> Session 集合
+    private final ConcurrentHashMap<Long, Set<E>> expiryMap = new ConcurrentHashMap<Long, Set<E>>(); // 过期时间 -> NIOServerCnxn(Session) 集合
 
     /**
      * 下个过期时间
@@ -95,12 +97,14 @@ public class ExpiryQueue<E> {
     public Long update(E elem, int timeout) {
         Long prevExpiryTime = elemMap.get(elem);
         long now = Time.currentElapsedTime();
-        Long newExpiryTime = roundToNextInterval(now + timeout);
+        Long newExpiryTime = roundToNextInterval(now + timeout); // 计算新的过期时间
 
         if (newExpiryTime.equals(prevExpiryTime)) {
             // No change, so nothing to update
             return null;
         }
+
+        // 更新 elemMap 和 expiryMap
 
         // First add the elem to the new expiry time bucket in expiryMap.
         Set<E> set = expiryMap.get(newExpiryTime);

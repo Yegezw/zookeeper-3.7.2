@@ -63,10 +63,17 @@ public class NIOServerCnxn extends ServerCnxn {
 
     private final NIOServerCnxnFactory factory;
 
+    /**
+     * clientSocket
+     */
     private final SocketChannel sock;
 
     private final SelectorThread selectorThread;
 
+    /**
+     * 注册在 SelectorThread 上的 SelectionKey
+     * <br>{@link SelectorThread#processAcceptedConnections()}
+     */
     private final SelectionKey sk;
 
     /**
