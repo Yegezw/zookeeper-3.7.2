@@ -84,6 +84,11 @@ public class ClientCnxn {
 
     /* predefined xid's values recognized as special by the server */
     // -1 means notification(WATCHER_EVENT)
+    /**
+     * 用于 watch 机制<br>
+     * {@link org.apache.zookeeper.server.NIOServerCnxn#process(WatchedEvent) 服务端触发}<br>
+     * {@link EventThread#processEvent(Object) 客户端触发}
+     */
     public static final int NOTIFICATION_XID = -1;
     // -2 is the xid for pings
     public static final int PING_XID = -2;
@@ -536,7 +541,7 @@ public class ClientCnxn {
             }
             WatcherSetEventPair pair = new WatcherSetEventPair(watchers, event);
             // queue the pair (watch set & event) for later processing
-            waitingEvents.add(pair);
+            waitingEvents.add(pair); // 扔到 waitingEvents
         }
 
         public void queueCallback(AsyncCallback cb, int rc, String path, Object ctx) {
@@ -597,7 +602,7 @@ public class ClientCnxn {
                     WatcherSetEventPair pair = (WatcherSetEventPair) event;
                     for (Watcher watcher : pair.watchers) {
                         try {
-                            watcher.process(pair.event);
+                            watcher.process(pair.event); // 触发 watch 回调
                         } catch (Throwable t) {
                             LOG.error("Error while calling watcher.", t);
                         }
@@ -936,6 +941,7 @@ public class ClientCnxn {
                 }
               return;
             case NOTIFICATION_XID:
+                // watch 机制的响应
                 LOG.debug("Got notification session id: 0x{}",
                     Long.toHexString(sessionId));
                 WatcherEvent event = new WatcherEvent();
@@ -950,7 +956,7 @@ public class ClientCnxn {
 
                 WatchedEvent we = new WatchedEvent(event);
                 LOG.debug("Got {} for session id 0x{}", we, Long.toHexString(sessionId));
-                eventThread.queueEvent(we);
+                eventThread.queueEvent(we); // 扔到 waitingEvents
                 return;
             default:
                 break;

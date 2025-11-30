@@ -130,7 +130,7 @@ public class FinalRequestProcessor implements RequestProcessor {
         zks.decInProcess();
         zks.requestFinished(request);
         Code err = Code.OK;
-        Record rsp = null;
+        Record rsp = null; // 响应
         String path = null;
         int responseSize = 0;
         try {
@@ -574,6 +574,7 @@ public class FinalRequestProcessor implements RequestProcessor {
                 // Serialized read and get children responses could be cached by the connection
                 // object. Cache entries are identified by their path and last modified zxid,
                 // so these values are passed along with the response.
+                // 返回客户端响应, 再此之前, watch 的回调已经完成
                 switch (opCode) {
                     case OpCode.getData : {
                         GetDataResponse getDataResponse = (GetDataResponse) rsp;
@@ -627,7 +628,7 @@ public class FinalRequestProcessor implements RequestProcessor {
         }
         zks.checkACL(cnxn, zks.getZKDatabase().aclForNode(n), ZooDefs.Perms.READ, authInfo, path, null);
         Stat stat = new Stat();
-        byte[] b = zks.getZKDatabase().getData(path, stat, getDataRequest.getWatch() ? cnxn : null); // 查询数据
+        byte[] b = zks.getZKDatabase().getData(path, stat, getDataRequest.getWatch() ? cnxn : null); // 查询数据, NIOServerCnxn 就是 Watcher
         return new GetDataResponse(b, stat);
     }
 

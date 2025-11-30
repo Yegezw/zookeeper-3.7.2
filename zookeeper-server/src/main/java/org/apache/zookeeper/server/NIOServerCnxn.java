@@ -52,7 +52,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-// 每个客户端一个
+// 每个客户端一个, 它也是 Watcher
 /**
  * This class handles communication with clients using NIO. There is one per
  * client, but only one thread doing the communication.
@@ -85,6 +85,9 @@ public class NIOServerCnxn extends ServerCnxn {
 
     protected ByteBuffer incomingBuffer = lenBuffer;
 
+    /**
+     * 返回客户端响应
+     */
     private final Queue<ByteBuffer> outgoingBuffers = new LinkedBlockingQueue<ByteBuffer>();
 
     private int sessionTimeout;
@@ -269,6 +272,7 @@ public class NIOServerCnxn extends ServerCnxn {
         } else {
             directBuffer.clear();
 
+            // 返回客户端响应
             for (ByteBuffer b : outgoingBuffers) {
                 if (directBuffer.remaining() < b.remaining()) {
                     /*
@@ -298,6 +302,7 @@ public class NIOServerCnxn extends ServerCnxn {
              */
             directBuffer.flip();
 
+            // 返回客户端响应
             int sent = sock.write(directBuffer);
 
             ByteBuffer bb;
@@ -376,6 +381,7 @@ public class NIOServerCnxn extends ServerCnxn {
                     }
                 }
             }
+            // 返回客户端响应
             if (k.isWritable()) {
                 handleWrite(k);
 

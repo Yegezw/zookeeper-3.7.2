@@ -73,8 +73,14 @@ public class DataTree {
      */
     private final NodeHashMap nodes; // 内存节点树
 
+    /**
+     * 服务端的 Watcher 是 {@link NIOServerCnxn#process(WatchedEvent)}
+     */
     private IWatchManager dataWatches; // WatchManager
 
+    /**
+     * 服务端的 Watcher 是 {@link NIOServerCnxn#process(WatchedEvent)}
+     */
     private IWatchManager childWatches;
 
     /** cached total size of paths and data for all DataNodes */
@@ -628,7 +634,7 @@ public class DataTree {
         nodeDataSize.addAndGet(getNodeSize(path, data) - getNodeSize(path, lastdata));
 
         updateWriteStat(path, dataBytes);
-        dataWatches.triggerWatch(path, EventType.NodeDataChanged);
+        dataWatches.triggerWatch(path, EventType.NodeDataChanged); // 触发回调
         return s;
     }
 

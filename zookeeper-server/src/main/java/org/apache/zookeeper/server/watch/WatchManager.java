@@ -125,7 +125,7 @@ public class WatchManager implements IWatchManager {
 
     @Override
     public WatcherOrBitSet triggerWatch(String path, EventType type, WatcherOrBitSet supress) {
-        WatchedEvent e = new WatchedEvent(type, KeeperState.SyncConnected, path);
+        WatchedEvent e = new WatchedEvent(type, KeeperState.SyncConnected, path); // 创建事件
         Set<Watcher> watchers = new HashSet<>();
         PathParentIterator pathParentIterator = getPathParentIterator(path);
         synchronized (this) {
@@ -169,7 +169,7 @@ public class WatchManager implements IWatchManager {
             if (supress != null && supress.contains(w)) {
                 continue;
             }
-            w.process(e); // 触发回调
+            w.process(e); // 触发回调 NIOServerCnxn
         }
 
         switch (type) {
