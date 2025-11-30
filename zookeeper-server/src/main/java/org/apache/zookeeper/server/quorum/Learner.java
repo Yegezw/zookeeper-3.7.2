@@ -18,44 +18,11 @@
 
 package org.apache.zookeeper.server.quorum;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.nio.ByteBuffer;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import javax.net.ssl.SSLSocket;
-import org.apache.jute.BinaryInputArchive;
-import org.apache.jute.BinaryOutputArchive;
-import org.apache.jute.InputArchive;
-import org.apache.jute.OutputArchive;
-import org.apache.jute.Record;
+import org.apache.jute.*;
 import org.apache.zookeeper.ZooDefs.OpCode;
 import org.apache.zookeeper.common.Time;
 import org.apache.zookeeper.common.X509Exception;
-import org.apache.zookeeper.server.ExitCode;
-import org.apache.zookeeper.server.Request;
-import org.apache.zookeeper.server.ServerCnxn;
-import org.apache.zookeeper.server.ServerMetrics;
-import org.apache.zookeeper.server.TxnLogEntry;
-import org.apache.zookeeper.server.ZooTrace;
+import org.apache.zookeeper.server.*;
 import org.apache.zookeeper.server.quorum.QuorumPeer.QuorumServer;
 import org.apache.zookeeper.server.quorum.flexible.QuorumVerifier;
 import org.apache.zookeeper.server.util.ConfigUtils;
@@ -68,6 +35,22 @@ import org.apache.zookeeper.txn.TxnHeader;
 import org.apache.zookeeper.util.ServiceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.net.ssl.SSLSocket;
+import java.io.*;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * This class is the superclass of two of the three main actors in a ZK
@@ -717,7 +700,7 @@ public class Learner {
                     }
 
                     break;
-                case Leader.UPTODATE:
+                case Leader.UPTODATE: // 对应 LearnerHandler (告知 Learner 数据已同步, 可开始服务客户端)
                     LOG.info("Learner received UPTODATE message");
                     if (newLeaderQV != null) {
                         boolean majorChange = self.processReconfig(newLeaderQV, null, null, true);
@@ -729,7 +712,7 @@ public class Learner {
                         zk.takeSnapshot(syncSnapshot);
                         self.setCurrentEpoch(newEpoch);
                     }
-                    self.setZooKeeperServer(zk);
+                    self.setZooKeeperServer(zk); // 关键
                     self.adminServer.setZooKeeperServer(zk);
                     break outerLoop;
                 case Leader.NEWLEADER: // Getting NEWLEADER here instead of in discovery
@@ -772,8 +755,8 @@ public class Learner {
             }
         }
         ack.setZxid(ZxidUtils.makeZxid(newEpoch, 0));
-        writePacket(ack, true);
-        zk.startServing();
+        writePacket(ack, true); // 发送最终 ACK
+        zk.startServing(); // 开始服务客户端
         /*
          * Update the election vote here to ensure that all members of the
          * ensemble report the same vote to new servers that start up and

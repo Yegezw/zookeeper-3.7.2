@@ -97,6 +97,9 @@ public class Leader extends LearnerMaster {
     volatile LearnerCnxAcceptor cnxAcceptor = null;
 
     // list of all the learners, including followers and observers
+    /**
+     * 所有 LearnerHandler
+     */
     private final HashSet<LearnerHandler> learners = new HashSet<LearnerHandler>();
 
     private final BufferStats proposalStats;
@@ -422,6 +425,7 @@ public class Leader extends LearnerMaster {
                 ExecutorService executor = Executors.newFixedThreadPool(serverSockets.size());
                 CountDownLatch latch = new CountDownLatch(serverSockets.size());
 
+                // 启动所有 LearnerCnxAcceptorHandler 线程, 每个 Follower Observer 都有独立的 LearnerHandler 线程处理
                 serverSockets.forEach(serverSocket ->
                         executor.submit(new LearnerCnxAcceptorHandler(serverSocket, latch)));
 
@@ -463,7 +467,7 @@ public class Leader extends LearnerMaster {
                     Thread.currentThread().setName("LearnerCnxAcceptorHandler-" + serverSocket.getLocalSocketAddress());
 
                     while (!stop.get()) {
-                        acceptConnections();
+                        acceptConnections(); // 每个 Follower Observer 都有独立的 LearnerHandler 线程处理
                     }
                 } catch (Exception e) {
                     LOG.warn("Exception while accepting follower", e);
@@ -489,7 +493,7 @@ public class Leader extends LearnerMaster {
 
                     BufferedInputStream is = new BufferedInputStream(socket.getInputStream());
                     LearnerHandler fh = new LearnerHandler(socket, is, Leader.this);
-                    fh.start();
+                    fh.start(); // 每个 Follower Observer 都有独立的 LearnerHandler 线程处理
                 } catch (SocketException e) {
                     error = true;
                     if (stop.get()) {
@@ -558,7 +562,7 @@ public class Leader extends LearnerMaster {
         zk.registerJMX(new LeaderBean(this, zk), self.jmxLocalPeerBean);
 
         try {
-            self.setZabState(QuorumPeer.ZabState.DISCOVERY);
+            self.setZabState(QuorumPeer.ZabState.DISCOVERY); // 1. 发现并确认新 epoch
             self.tick.set(0);
             zk.loadData();
 
@@ -567,7 +571,7 @@ public class Leader extends LearnerMaster {
             // Start thread that waits for connection requests from
             // new followers.
             cnxAcceptor = new LearnerCnxAcceptor();
-            cnxAcceptor.start();
+            cnxAcceptor.start(); // 与 Follower Observer 建立连接, 2888 主要用于数据同步
 
             long epoch = getEpochToPropose(self.getMyId(), self.getAcceptedEpoch());
 
@@ -577,6 +581,7 @@ public class Leader extends LearnerMaster {
                 lastProposed = zk.getZxid();
             }
 
+            // 创建 new leader 提案
             newLeaderProposal.packet = new QuorumPacket(NEWLEADER, zk.getZxid(), null, null);
 
             if ((newLeaderProposal.packet.getZxid() & 0xffffffffL) != 0) {
@@ -624,13 +629,14 @@ public class Leader extends LearnerMaster {
             // us. We do this by waiting for the NEWLEADER packet to get
             // acknowledged
 
+            // 等待 epoch 确认
             waitForEpochAck(self.getMyId(), leaderStateSummary);
             self.setCurrentEpoch(epoch);
             self.setLeaderAddressAndId(self.getQuorumAddress(), self.getMyId());
-            self.setZabState(QuorumPeer.ZabState.SYNCHRONIZATION);
+            self.setZabState(QuorumPeer.ZabState.SYNCHRONIZATION); // 2. 等待 Follower 同步
 
             try {
-                waitForNewLeaderAck(self.getMyId(), zk.getZxid());
+                waitForNewLeaderAck(self.getMyId(), zk.getZxid()); // 等待多数派确认 new leader
             } catch (InterruptedException e) {
                 shutdown("Waiting for a quorum of followers, only synced with sids: [ "
                          + newLeaderProposal.ackSetsToString()
@@ -675,11 +681,13 @@ public class Leader extends LearnerMaster {
                 zk.setZxid((zk.getZxid() & 0xffffffff00000000L) | zxid);
             }
 
+            //  默认情况下 Leader 既负责集群管理 (事务协调、数据同步), 也承接客户端的读写请求
+            //  若显式禁用, 则 Leader 仅专注于集群管理, 不处理客户端请求, 减轻 Leader 负载, 提升写入性能
             if (!System.getProperty("zookeeper.leaderServes", "yes").equals("no")) {
-                self.setZooKeeperServer(zk);
+                self.setZooKeeperServer(zk); // 关键
             }
 
-            self.setZabState(QuorumPeer.ZabState.BROADCAST);
+            self.setZabState(QuorumPeer.ZabState.BROADCAST); // 3. 正常服务, 处理客户端请求
             self.adminServer.setZooKeeperServer(zk);
 
             // We ping twice a tick, so we only update the tick every other
@@ -688,6 +696,7 @@ public class Leader extends LearnerMaster {
             // If not null then shutdown this leader
             String shutdownMessage = null;
 
+            // 主循环
             while (true) {
                 synchronized (this) {
                     long start = Time.currentElapsedTime();
@@ -714,6 +723,7 @@ public class Leader extends LearnerMaster {
 
                     syncedAckSet.addAck(self.getMyId());
 
+                    // 向所有 Learner 发送 ping, 保持连接活跃
                     for (LearnerHandler f : getLearners()) {
                         if (f.synced()) {
                             syncedAckSet.addAck(f.getSid());

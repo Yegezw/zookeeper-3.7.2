@@ -63,6 +63,9 @@ public class LearnerHandler extends ZooKeeperThread {
         LOG.info("{} = {}", LEADER_CLOSE_SOCKET_ASYNC, closeSocketAsync);
     }
 
+    /**
+     * Follower OR Observer
+     */
     protected final Socket sock;
 
     public Socket getSocket() {
@@ -71,6 +74,9 @@ public class LearnerHandler extends ZooKeeperThread {
 
     AtomicBoolean sockBeingClosed = new AtomicBoolean(false);
 
+    /**
+     * {@link Leader}
+     */
     final LearnerMaster learnerMaster;
 
     /** Deadline for receiving the next ack. If we are bootstrapping then
@@ -217,10 +223,19 @@ public class LearnerHandler extends ZooKeeperThread {
 
     }
 
+    /**
+     * {@link LearnerHandler#sock} 输入流
+     */
     private BinaryInputArchive ia;
 
+    /**
+     * {@link LearnerHandler#sock} 输出流
+     */
     private BinaryOutputArchive oa;
 
+    /**
+     * {@link LearnerHandler#sock} 输入流
+     */
     private final BufferedInputStream bufferedInput;
     private BufferedOutputStream bufferedOutput;
 
@@ -540,7 +555,7 @@ public class LearnerHandler extends ZooKeeperThread {
 
             // Take any necessary action if we need to send TRUNC or DIFF
             // startForwarding() will be called in all cases
-            boolean needSnap = syncFollower(peerLastZxid, learnerMaster);
+            boolean needSnap = syncFollower(peerLastZxid, learnerMaster); // 确定同步方式
 
             // syncs between followers and the leader are exempt from throttling because it
             // is importatnt to keep the state of quorum servers up-to-date. The exempted syncs
@@ -630,15 +645,16 @@ public class LearnerHandler extends ZooKeeperThread {
             /*
              * Wait until learnerMaster starts up
              */
-            learnerMaster.waitForStartup();
+            learnerMaster.waitForStartup(); // 等待 Leader 启动
 
             // Mutation packets will be queued during the serialize,
             // so we need to mark when the peer can actually start
             // using the data
             //
             LOG.debug("Sending UPTODATE message to {}", sid);
-            queuedPackets.add(new QuorumPacket(Leader.UPTODATE, -1, null, null));
+            queuedPackets.add(new QuorumPacket(Leader.UPTODATE, -1, null, null)); // 告知 Learner 数据已同步, 可开始服务客户端
 
+            // 主流程
             while (true) {
                 qp = new QuorumPacket();
                 ia.readRecord(qp, "packet");
@@ -683,6 +699,7 @@ public class LearnerHandler extends ZooKeeperThread {
                     learnerMaster.revalidateSession(qp, this);
                     break;
                 case Leader.REQUEST:
+                    // 处理来自 Learner 的请求 (如 sync 请求)
                     bb = ByteBuffer.wrap(qp.getData());
                     sessionId = bb.getLong();
                     cxid = bb.getInt();

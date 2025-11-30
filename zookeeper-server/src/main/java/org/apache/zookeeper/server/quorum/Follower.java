@@ -86,11 +86,11 @@ public class Follower extends Learner {
 
         try {
             self.setZabState(QuorumPeer.ZabState.DISCOVERY);
-            QuorumServer leaderServer = findLeader();
+            QuorumServer leaderServer = findLeader(); // 根据选举结果找到 Leader 服务器
             try {
-                connectToLeader(leaderServer.addr, leaderServer.hostname);
+                connectToLeader(leaderServer.addr, leaderServer.hostname);   // 连接到 Leader, 对方会用 LearnerHandler 进行通信
                 connectionTime = System.currentTimeMillis();
-                long newEpochZxid = registerWithLeader(Leader.FOLLOWERINFO);
+                long newEpochZxid = registerWithLeader(Leader.FOLLOWERINFO); // 注册到 Leader
                 if (self.isReconfigStateChange()) {
                     throw new Exception("learned about role change");
                 }
@@ -107,7 +107,7 @@ public class Follower extends Learner {
                 long startTime = Time.currentElapsedTime();
                 self.setLeaderAddressAndId(leaderServer.addr, leaderServer.getId());
                 self.setZabState(QuorumPeer.ZabState.SYNCHRONIZATION);
-                syncWithLeader(newEpochZxid);
+                syncWithLeader(newEpochZxid); // 核心同步方法
                 self.setZabState(QuorumPeer.ZabState.BROADCAST);
                 completedSync = true;
                 long syncTime = Time.currentElapsedTime() - startTime;
@@ -181,7 +181,7 @@ public class Follower extends Learner {
                 self.setLastSeenQuorumVerifier(qv, true);
             }
 
-            fzk.logRequest(hdr, txn, digest); // 核心
+            fzk.logRequest(hdr, txn, digest); // 核心: 写入事务日志
             if (hdr != null) {
                 /*
                  * Request header is created only by the leader, so this is only set
@@ -202,7 +202,7 @@ public class Follower extends Learner {
             break;
         case Leader.COMMIT: // Leader 发来的 commit 请求
             ServerMetrics.getMetrics().LEARNER_COMMIT_RECEIVED_COUNT.add(1);
-            fzk.commit(qp.getZxid());
+            fzk.commit(qp.getZxid()); // 提交事务, 应用到内存
             if (om != null) {
                 final long startTime = Time.currentElapsedTime();
                 om.proposalCommitted(qp.getZxid());

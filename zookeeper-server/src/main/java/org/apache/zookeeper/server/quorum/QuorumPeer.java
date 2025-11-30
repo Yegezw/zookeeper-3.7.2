@@ -502,9 +502,21 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
      * Zab protocol that peer is running.
      */
     public enum ZabState {
+        /**
+         * 选举
+         */
         ELECTION,
+        /**
+         * 发现并确认新 epoch
+         */
         DISCOVERY,
+        /**
+         * 等待 Follower 同步
+         */
         SYNCHRONIZATION,
+        /**
+         * 正常服务, 处理客户端请求
+         */
         BROADCAST
     }
 
@@ -1478,7 +1490,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                     try {
                         LOG.info("OBSERVING");
                         setObserver(makeObserver(logFactory)); // ObserverZooKeeperServer
-                        observer.observeLeader(); // Observer 流程, 同步数据
+                        observer.observeLeader(); // Observer 流程, 同步数据 + inform
                     } catch (Exception e) {
                         LOG.warn("Unexpected exception", e);
                     } finally {
@@ -1497,7 +1509,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                     try {
                         LOG.info("FOLLOWING");
                         setFollower(makeFollower(logFactory)); // FollowerZooKeeperServer
-                        follower.followLeader(); // Follower 流程, 同步数据
+                        follower.followLeader(); // Follower 流程, 同步数据 + propose + commit
                     } catch (Exception e) {
                         LOG.warn("Unexpected exception", e);
                     } finally {
@@ -1510,7 +1522,7 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
                     LOG.info("LEADING");
                     try {
                         setLeader(makeLeader(logFactory)); // LeaderZooKeeperServer
-                        leader.lead(); // Leader 流程
+                        leader.lead(); // Leader 流程, 同步数据
                         setLeader(null);
                     } catch (Exception e) {
                         LOG.warn("Unexpected exception", e);
