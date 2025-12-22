@@ -1007,7 +1007,7 @@ public class DataTree {
                         header.getZxid(),
                         header.getTime(),
                         subtxn.getType());
-                    ProcessTxnResult subRc = processTxn(subHdr, record, true);
+                    ProcessTxnResult subRc = processTxn(subHdr, record, true); // isSubTxn = true: 告诉 processTxn 这是子事务, 不要更新 lastProcessedZxid
                     rc.multiResult.add(subRc);
                     if (subRc.err != 0 && rc.err == 0) {
                         rc.err = subRc.err;
